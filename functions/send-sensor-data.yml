@@ -1,0 +1,22 @@
+version: 1.0
+provider:
+  name: openfaas
+  gateway: http://127.0.0.1:8080
+functions:
+  send-sensor-data:
+    lang: python3
+    build_args:
+      PYTHON_VERSION: 3.10
+    handler: ./send-sensor-data
+    image: docker.io/sky010/send-sensor-data:latest
+    environment:
+      influxdb_host: "http://172.17.0.1:8086"
+      influxdb_org: "Mycelium"
+      influxdb_token: "r-Fq-5yO770pavckMjpq_wSh515FP1tdRKYMeZtn6mno-9DttaJdAUt2Gf_apZptc8Kse11qD2TM83ANJv38eQ=="
+      influxdb_bucket: "FloodMonitoring"
+      write_debug: true
+
+configuration:
+  copy:
+    - ./send-sensor-data/hourly_rainfall_train.csv
+    - ./send-sensor-data/hourly_water_level_train.csv

@@ -13,7 +13,7 @@
       flake = false;
     };
     ssh-volodiapg = {
-      url = "https://github.com/volodiapg.keys";
+      url = "https://github.com/arnolec.keys";
       flake = false;
     };
   };

@@ -37,7 +37,7 @@ faas-deploy: faas-login
 
 tun:
     $SSH_CMD "sudo k3s kubectl port-forward -n openfaas svc/gateway 8080:8080"&
-    $SSH_CMD -N -g -L "8080:127.0.0.1:8080"
+    {{SSH_CMD}} -N -g -L "8080:127.0.0.1:8080"
     wait
 
 mqtt:
@@ -53,6 +53,6 @@ vm:
       install = vm.config.system.build.vm;
     in
     install" )
-    rm *.qcow2
+    rm *.qcow2 || true
     exec $vmpath/bin/run-* -nographic -cpu host -enable-kvm
 

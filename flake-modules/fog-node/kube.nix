@@ -60,7 +60,7 @@ in {
           };
           values = {
             broker = "tcp://10.0.2.15:1883";
-            topic = "sample-topic-2";
+            topic = "rawData";
             clientID = "m2";
           };
         };
