@@ -1,0 +1,1 @@
+INFLUXD_CONFIG_PATH=/etc/influxdb/config.toml
