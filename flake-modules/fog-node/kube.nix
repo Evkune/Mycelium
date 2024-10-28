@@ -92,7 +92,15 @@ in {
         k3s = {
           enable = true;
         };
-
+        
+        # Active le service InfluxDB
+        influxdb = {
+          enable = true;
+          
+          # Optionnel : Configurer le répertoire de stockage pour InfluxDB
+          dataDir = "/var/lib/influxdb";  # Par défaut
+          httpBindAddress = ":8086";     # Adresse pour l'API HTTP (par défaut sur 8086)
+        };
         mosquitto = {
           enable = true;
 
@@ -114,6 +122,7 @@ in {
         systemPackages = with pkgs; [
           k9s
           mosquitto
+          influxdb
         ];
         etc = {
           "kubenix.json".source =

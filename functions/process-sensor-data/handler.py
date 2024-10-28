@@ -2,15 +2,15 @@ import asyncio
 import json
 import os
 from datetime import datetime, timedelta
+from re import split
 
 import influxdb_client
-import nats
+import aiomqtt as mqtt
 from influxdb_client import Point
 from influxdb_client.client.write_api import SYNCHRONOUS
 
 client = None
-date_format = '%Y-%m-%d %H:%M:%S'
-
+date_format = '%Y-%m-%dT%H:%M:%S.000Z'
 
 def handle(req):
     """
@@ -149,24 +149,19 @@ async def process(req):
     :param req: un payload avec une date, un niveau d'eau de pluie (rainfall) et le niveau d'eau (waterlevel)
     :return: envoie deux payloads distincts, un sur le topic triggerAnalyse et l'autre sur triggerAlert
     """
-    # Connection au serveur NATS
-    nc = await nats.connect(servers=os.environ.get('nats_host'))
+    # Connection au serveur MQTT
+    async with mqtt.Client("10.0.2.15", 1883) as mqtt:
+        json_input = json.loads(req)
+        date = datetime.strptime(json_input["date"], date_format)
+        print(f"Receiving data collected on {date}")
 
-    json_input = json.loads(req)
+        export_to_database("measures", json_input, date)
+        alert = is_there_alert(json_input)
+        if alert != '{}':
+            await mqtt.publish('triggerAlert', f"{alert}".encode())
 
-    date = datetime.strptime(json_input['date'], date_format)
-    print(f"Receiving data collected on {date}")
-
-    export_to_database("measures", json_input, date)
-    alert = is_there_alert(json_input)
-    if alert != '{}':
-        await nc.publish('triggerAlert', f"{alert}".encode())
-
-    query = query_from_database("measures", date)
-    analyse = is_there_analyse(query)
-    if analyse != '{}':
-        await nc.publish('triggerAnalyse', f"{analyse}".encode())
-
-    await nc.flush()
-    await nc.close()
-    close_database_connection()
+        query = query_from_database("measures", date)
+        analyse = is_there_analyse(query)
+        if analyse != '{}':
+            await mqtt.publish('triggerAnalyse', f"{analyse}".encode())
+        close_database_connection()

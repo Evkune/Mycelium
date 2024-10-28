@@ -29,7 +29,7 @@ async def process(req):
     if req == "mqtt":
         # Connexion MQTT
         async with mqtt.Client("10.0.2.15", 1883) as client:
-            rawData = accessDatabase(15)
+            rawData = accessDatabase(10)
             # Publier les données sur le topic rawData
             await client.publish('rawData', rawData.encode('utf-8'))
             # S'abonner au topic pour écouter les messages
