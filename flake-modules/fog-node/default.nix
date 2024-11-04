@@ -38,7 +38,7 @@
         security.sudo.wheelNeedsPassword = false;
         # Enable a basic firewall (optional)
         networking.firewall.enable = true;
-        networking.firewall.allowedTCPPorts = [22]; # Open SSH port
+        networking.firewall.allowedTCPPorts = [22 8086]; # Open SSH port
       })
     ];
   in {
