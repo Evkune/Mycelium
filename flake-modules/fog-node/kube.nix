@@ -65,6 +65,11 @@ in {
           };
         };
       };
+      kubernetes.resources.deployments = {
+        gateway.spec.template.spec.containers.gateway.image = lib.mkForce "ghcr.io/volodiapg/openfaas/gateway:0.27.2";
+        gateway.spec.template.spec.containers.faas-netes.image = lib.mkForce "ghcr.io/volodiapg/openfaas/faas-netes:0.17.1";
+        queue-worker.spec.template.spec.containers.queue-worker.image = lib.mkForce "ghcr.io/volodiapg/openfaas/queue-worker:0.14.0";
+      };
     };
 
     nixosModules.kube = {pkgs, ...}: {
@@ -91,8 +96,8 @@ in {
       # Service de configuration pour InfluxDB
       systemd.services.influxdb-setup = {
         description = "Configuration initiale d'InfluxDB";
-        wants = [ "influxdb.service" ];        # Assure que `influxdb` est démarré avant
-        after = [ "influxdb.service" ];         # Exécute après le démarrage d'InfluxDB
+        wants = ["influxdb.service"]; # Assure que `influxdb` est démarré avant
+        after = ["influxdb.service"]; # Exécute après le démarrage d'InfluxDB
         serviceConfig = {
           ExecStart = ''
             /run/current-system/sw/bin/influx setup -username admin \
@@ -103,22 +108,23 @@ in {
                         --token r-Fq-5yO770pavckMjpq_wSh515FP1tdRKYMeZtn6mno-9DttaJdAUt2Gf_apZptc8Kse11qD2TM83ANJv38eQ== \
                         --force
           '';
-          Type = "oneshot";   # Le service s'exécute une fois puis s'arrête
+          Type = "oneshot"; # Le service s'exécute une fois puis s'arrête
         };
-        wantedBy = [ "multi-user.target" ];    # S'assure que le service s'exécute au démarrage
+        wantedBy = ["multi-user.target"]; # S'assure que le service s'exécute au démarrage
       };
       services = {
         k3s = {
           enable = true;
         };
-        
+
         # Active le service InfluxDB
-        influxdb = {
+        influxdb2 = {
           enable = true;
-          package = pkgs.influxdb2-server;
           # Optionnel : Configurer le répertoire de stockage pour InfluxDB
           #dataDir = "/var/lib/influxdb";  # Par défaut
-          #httpBindAddress = ":8086";     # Adresse pour l'API HTTP (par défaut sur 8086)
+          settings = {
+            http-bind-address = "0.0.0.0:9086";
+          };
         };
         mosquitto = {
           enable = true;
