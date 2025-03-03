@@ -146,8 +146,7 @@
           "nixpkgs"
         ],
         "openfaas": "openfaas",
-        "srvos": "srvos",
-        "ssh-volodiapg": "ssh-volodiapg"
+        "srvos": "srvos"
       }
     },
     "srvos": {
@@ -166,18 +165,6 @@
         "owner": "nix-community",
         "repo": "srvos",
         "type": "github"
-      }
-    },
-    "ssh-volodiapg": {
-      "flake": false,
-      "locked": {
-        "narHash": "sha256-FuW5WwOBAmYLvbMc63OOiB4rxDpghsPyzP4VZ65cTu8=",
-        "type": "file",
-        "url": "https://github.com/arnolec.keys"
-      },
-      "original": {
-        "type": "file",
-        "url": "https://github.com/arnolec.keys"
       }
     },
     "systems": {

@@ -1,4 +1,5 @@
-export SSH_CMD := "ssh -o StrictHostKeychecking=no -o UserKnownHostsFile=/dev/null myce@127.0.0.1 -p 4444"
+export SSHPASS:="myce"
+export SSH_CMD := "sshpass -e ssh -t -oUserKnownHostsFile=/dev/null -oStrictHostKeyChecking=no myce@127.0.0.1 -p 4444"
 
 _default:
     @just --list
@@ -42,6 +43,9 @@ tun:
 
 mqtt:
     mosquitto_pub -h localhost -t sample-topic -m "Hello World!"
+
+mqtt-client topic:
+    mosquitto_sub -h localhost -t {{ topic }}
 
 vm:
     #!/usr/bin/env bash

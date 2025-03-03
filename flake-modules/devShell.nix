@@ -16,6 +16,8 @@
         nixos-rebuild
         qemu
         faas-cli
+        mosquitto
+        sshpass
       ];
     };
   };
