@@ -222,8 +222,6 @@ in {
         mosquitto = {
           enable = true;
 
-          # Mosquitto is only listening on the local IP, traffic from outside is not
-          # allowed.
           listeners = [
             {
               address = "0.0.0.0";

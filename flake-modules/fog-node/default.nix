@@ -1,4 +1,8 @@
-{inputs, ...}: {
+{
+  inputs,
+  lib,
+  ...
+}: {
   imports = [
     ./kube.nix
   ];
@@ -35,8 +39,7 @@
         };
         security.sudo.wheelNeedsPassword = false;
         # Enable a basic firewall (optional)
-        networking.firewall.enable = true;
-        networking.firewall.allowedTCPPorts = [22 8086]; # Open SSH port
+        networking.firewall.enable = lib.mkForce false;
       })
     ];
   in {
@@ -66,6 +69,11 @@
                     from = "host";
                     host.port = 1883;
                     guest.port = 1883;
+                  }
+                  {
+                    from = "host";
+                    host.port = 8086;
+                    guest.port = 8086;
                   }
                 ];
                 memorySize = 4096;

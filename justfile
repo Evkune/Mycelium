@@ -41,11 +41,11 @@ tun:
     {{SSH_CMD}} -N -g -L "8080:127.0.0.1:8080"
     wait
 
-mqtt:
-    mosquitto_pub -h localhost -t sample-topic -m "Hello World!"
+mqtt-pub topic message:
+    mosquitto_pub -h 127.0.0.1 -p 1883 -t "{{ topic }}" -m "{{ message }}"
 
-mqtt-client topic:
-    mosquitto_sub -h localhost -t {{ topic }}
+mqtt-sub topic:
+    mosquitto_sub -h 127.0.0.1 -p 1883 -t "{{ topic }}"
 
 vm:
     #!/usr/bin/env bash
