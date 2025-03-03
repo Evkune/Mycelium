@@ -1,6 +1,12 @@
 export SSHPASS:="myce"
 export SSH_CMD := "sshpass -e ssh -t -oUserKnownHostsFile=/dev/null -oStrictHostKeyChecking=no myce@127.0.0.1 -p 4444"
 
+# Registry for storing images temporarily
+REGISTRY := env_var_or_default('REGISTRY', "ttl.sh/" + `whoami` + "-" + `hostname`)
+
+# Time that the image will be stored in the registry
+TAG := env_var_or_default('TAG', "2h")
+
 _default:
     @just --list
 
@@ -9,15 +15,6 @@ container:
     nix build .#docker
     docker load < result
 
-# Push an image to ghcr
-_push image user:
-    docker tag {{ image }} ghcr.io/{{ user }}/{{ image }}
-    docker push ghcr.io/{{ user }}/{{ image }}
-
-# Push docker images to ghcr
-ghcr user: container
-    just _push tutosed:latest {{ user }}
-
 # connects inside the VM using SSH
 ssh:
     @$SSH_CMD
@@ -25,21 +22,29 @@ ssh:
 faas-login:
     #!/usr/bin/env bash
     PASS=$($SSH_CMD sudo kubectl get secret -n openfaas basic-auth -o jsonpath="{.data.basic-auth-password}" | base64 --decode)
-    echo $PASS | faas-cli login --password-stdin
+    echo $PASS | $SSH_CMD faas-cli login --password-stdin
     echo "PASSWORD: $PASS"
 
+# Publish OpenFaaS functions using the registry variables and modify the function file
 faas-pub: faas-login
-    cd {{ justfile_directory() }}/functions && find . -maxdepth 1 -type f -name '*.yml'  -printf '%f\n' \
-        | xargs -I {} faas-cli publish -f {}
+    #!/usr/bin/env bash
+    cd {{ justfile_directory() }}/functions
+    for file in *.yml; do
+        if [ -f "$file" ]; then
+            just faas-pub-single $file
+        fi
+    done
 
-faas-deploy: faas-login
-    cd {{ justfile_directory() }}/functions && find . -maxdepth 1 -type f -name '*.yml'  -printf '%f\n' \
-        | xargs -I {} faas-cli deploy -f {}
-
-tun:
-    $SSH_CMD "sudo k3s kubectl port-forward -n openfaas svc/gateway 8080:8080"&
-    {{SSH_CMD}} -N -g -L "8080:127.0.0.1:8080"
-    wait
+# Publish a single OpenFaaS function using the registry variables and modify the function file
+faas-pub-single file:
+    #!/usr/bin/env bash
+    cd {{ justfile_directory() }}/functions
+    sed -i "s|image: .*|image: {{ REGISTRY }}/$(basename {{file}} .yml):{{ TAG }}|" "{{file}}"
+    {{SSH_CMD}} << EOF
+    cd /home/myce/mycelium/functions
+    faas-cli publish -f "{{file}}"
+    faas-cli deploy -f "{{file}}"
+    EOF
 
 mqtt-pub topic message:
     mosquitto_pub -h 127.0.0.1 -p 1883 -t "{{ topic }}" -m "{{ message }}"

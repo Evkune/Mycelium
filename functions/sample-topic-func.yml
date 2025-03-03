@@ -6,7 +6,7 @@ functions:
   sample-topic-func:
     lang: go
     handler: ./sample-topic-func
-    image: docker.io/sky010/sample-topic-func:latest
+    image: ttl.sh/volodia-dell/sample-topic-func:2h
     annotations:
       topic: sample-topic
 

@@ -151,7 +151,7 @@ in {
         k9 = "sudo k9s --kubeconfig /etc/rancher/k3s/k3s.yaml -A";
       };
 
-      systemd.services.startTutoSEDContainer = {
+      systemd.services.startOpenFaas = {
         description = "Launch our tutosed container image";
         after = ["k3s.service"];
         wants = ["k3s.service"];
@@ -165,6 +165,21 @@ in {
           RemainAfterExit = "yes";
         };
       };
+
+      systemd.services.openfaas-gateway-nodeport = {
+        description = "OpenFaaS Gateway NodePort";
+        after = ["startOpenFaas.service"];
+        wants = ["startOpenFaas.service"];
+        wantedBy = ["multi-user.target"];
+        script = ''
+          ${pkgs.k3s}/bin/k3s kubectl port-forward -n openfaas svc/gateway 8080:8080 --address 0.0.0.0
+        '';
+        serviceConfig = {
+          Restart = "on-failure";
+          RestartSec = "5s";
+        };
+      };
+
       # Service de configuration pour InfluxDB
       systemd.services.influxdb2-init = {
         description = "Configuration initiale d'InfluxDB";

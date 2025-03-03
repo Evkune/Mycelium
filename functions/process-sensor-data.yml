@@ -8,7 +8,7 @@ functions:
     build_args:
       PYTHON_VERSION: 3.10
     handler: ./process-sensor-data
-    image: docker.io/sky010/process-sensor-data:latest
+    image: ttl.sh/volodia-dell/process-sensor-data:2h
     environment:
       # InfluxDB Configuration
       INFLUXDB_URL: http://10.42.0.1:8086

@@ -34,7 +34,7 @@
         users.users.${cfg.user} = {
           isNormalUser = true;
           home = "/home/${cfg.user}";
-          extraGroups = ["wheel" "networkmanager"]; # Add the user to important groups
+          extraGroups = ["wheel" "networkmanager" "docker"]; # Add the user to important groups
           password = "myce";
         };
         security.sudo.wheelNeedsPassword = false;
@@ -57,23 +57,36 @@
           ++ [
             "${inputs.nixpkgs}/nixos/modules/profiles/qemu-guest.nix"
             ({pkgs, ...}: {
-              environment.systemPackages = [pkgs.just];
+              environment.systemPackages = with pkgs; [
+                just
+                faas-cli
+              ];
+              virtualisation.docker.enable = true;
               virtualisation.vmVariant.virtualisation = {
                 forwardPorts = [
+                  # SSH
                   {
                     from = "host";
                     host.port = 4444;
                     guest.port = 22;
                   }
+                  # MQTT
                   {
                     from = "host";
                     host.port = 1883;
                     guest.port = 1883;
                   }
+                  # InfluxDB
                   {
                     from = "host";
                     host.port = 8086;
                     guest.port = 8086;
+                  }
+                  # OpenFaaS
+                  {
+                    from = "host";
+                    host.port = 8080;
+                    guest.port = 8080;
                   }
                 ];
                 memorySize = 4096;
