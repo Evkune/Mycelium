@@ -46,7 +46,7 @@ in {
             clientID = "m1";
           };
         };
-        mqtt-connector2 = {
+        mqtt-rawdata = {
           namespace = lib.mkForce "openfaas";
           overrideNamespace = false;
           chart = pkgs.stdenvNoCC.mkDerivation {
@@ -62,6 +62,78 @@ in {
             broker = "tcp://10.0.2.15:1883";
             topic = "rawData";
             clientID = "m2";
+          };
+        };
+        mqtt-analyseddata = {
+          namespace = lib.mkForce "openfaas";
+          overrideNamespace = false;
+          chart = pkgs.stdenvNoCC.mkDerivation {
+            name = "mqtt-connector";
+            src = openfaas;
+
+            buildCommand = ''
+              ls $src
+              cp -r $src/chart/mqtt-connector/ $out
+            '';
+          };
+          values = {
+            broker = "tcp://10.0.2.15:1883";
+            topic = "analysedData";
+            clientID = "m3";
+          };
+        };
+      mqtt-triggeranalyse= {
+          namespace = lib.mkForce "openfaas";
+          overrideNamespace = false;
+          chart = pkgs.stdenvNoCC.mkDerivation {
+            name = "mqtt-connector";
+            src = openfaas;
+
+            buildCommand = ''
+              ls $src
+              cp -r $src/chart/mqtt-connector/ $out
+            '';
+          };
+          values = {
+            broker = "tcp://10.0.2.15:1883";
+            topic = "triggerAnalyse";
+            clientID = "m4";
+          };
+        };
+      mqtt-triggeralert= {
+          namespace = lib.mkForce "openfaas";
+          overrideNamespace = false;
+          chart = pkgs.stdenvNoCC.mkDerivation {
+            name = "mqtt-connector";
+            src = openfaas;
+
+            buildCommand = ''
+              ls $src
+              cp -r $src/chart/mqtt-connector/ $out
+            '';
+          };
+          values = {
+            broker = "tcp://10.0.2.15:1883";
+            topic = "triggerAlert";
+            clientID = "m5";
+          };
+        };
+      mqtt-secondtopic= {
+          namespace = lib.mkForce "openfaas";
+          overrideNamespace = false;
+          chart = pkgs.stdenvNoCC.mkDerivation {
+            name = "mqtt-connector";
+            src = openfaas;
+
+            buildCommand = ''
+              ls $src
+              cp -r $src/chart/mqtt-connector/ $out
+            '';
+          };
+          values = {
+            broker = "tcp://10.0.2.15:1883";
+            topic = "second-topic";
+            clientID = "m5";
           };
         };
       };
@@ -94,21 +166,46 @@ in {
         };
       };
       # Service de configuration pour InfluxDB
-      systemd.services.influxdb-setup = {
+      systemd.services.influxdb2-init = {
         description = "Configuration initiale d'InfluxDB";
-        wants = ["influxdb.service"]; # Assure que `influxdb` est démarré avant
-        after = ["influxdb.service"]; # Exécute après le démarrage d'InfluxDB
+        wants = [ "influxdb2.service" ];        # Assure que `influxdb` est démarré avant
+        after = [ "influxdb2.service" ];         # Exécute après le démarrage d'InfluxDB
         serviceConfig = {
-          ExecStart = ''
-            /run/current-system/sw/bin/influx setup -username admin \
-                        -password 'adminpassword' \
-                        --org Mycelium \
-                        --bucket FloodMonitoring \
-                        --retention 0 \
-                        --token r-Fq-5yO770pavckMjpq_wSh515FP1tdRKYMeZtn6mno-9DttaJdAUt2Gf_apZptc8Kse11qD2TM83ANJv38eQ== \
-                        --force
-          '';
-          Type = "oneshot"; # Le service s'exécute une fois puis s'arrête
+          ExecStart = let
+            influxSettings = {
+              http-bind-address = "0.0.0.0:8086";
+              auth-enabled = false;
+              log-enabled = false;
+              write-tracing = false;
+              pprof-enabled = false;
+              https-enabled = false;
+            };
+            script = pkgs.writeScript "influxdb2-init" ''
+              #!${pkgs.runtimeShell}
+              until ${pkgs.curl}/bin/curl -s -f -o /dev/null "http://${toString influxSettings.http-bind-address}"
+              do
+                sleep 5
+              done
+
+              # Configuration initiale d'InfluxDB
+              ${pkgs.influxdb2-cli}/bin/influx setup \
+                --host http://${toString influxSettings.http-bind-address} \
+                --username admin \
+                --password adminfaasfog \
+                --token "Uar6D5Kg0hmAeDjTN9r6q_YN3AhRbhVgLfjuSp243o4R4xHiQ0sEJFdkORZi-1hB57QTDr2VRQjd4Lg4rW1stg==" \
+                --org Mycelium \
+                --bucket Bucket1 \
+                --force
+
+                export INFLUX_TOKEN=Uar6D5Kg0hmAeDjTN9r6q_YN3AhRbhVgLfjuSp243o4R4xHiQ0sEJFdkORZi-1hB57QTDr2VRQjd4Lg4rW1stg==
+
+
+              # Création des autres buckets avec tokens spécifiques
+              ${pkgs.influxdb2-cli}/bin/influx bucket create --host http://${toString influxSettings.http-bind-address} --org Mycelium --name Bucket2
+              ${pkgs.influxdb2-cli}/bin/influx bucket create --host http://${toString influxSettings.http-bind-address} --org Mycelium --name FloodMonitoring
+            '';
+          in "${script} %u";
+          Type = "oneshot";   # Le service s'exécute une fois puis s'arrête
         };
         wantedBy = ["multi-user.target"]; # S'assure que le service s'exécute au démarrage
       };
@@ -120,11 +217,7 @@ in {
         # Active le service InfluxDB
         influxdb2 = {
           enable = true;
-          # Optionnel : Configurer le répertoire de stockage pour InfluxDB
-          #dataDir = "/var/lib/influxdb";  # Par défaut
-          settings = {
-            http-bind-address = "0.0.0.0:9086";
-          };
+          package = pkgs.influxdb2-server;
         };
         mosquitto = {
           enable = true;

@@ -36,7 +36,7 @@ async def export_to_database(measurement, json_input, date):
              .field("waterLevel", json_input['waterLevel'])
              .time(date, write_precision="s"))
 
-    write_api.write(bucket=os.environ.get('influxdb_bucket'), org=os.environ.get('influxdb_org'), record=point)
+    write_api.write(bucket=os.environ.get('INFLUXDB_BUCKET'), org=os.environ.get('INFLUXDB_ORG'), record=point)
 
 
 def is_there_alert(json_input):
@@ -66,9 +66,9 @@ def connect_to_database():
 
     if client is None:
         client = influxdb_client.InfluxDBClient(
-            os.environ.get('influxdb_host'),
-            token=os.environ.get('influxdb_token'),
-            org=os.environ.get('influxdb_org')
+            os.environ.get('INFLUXDB_URL'),
+            token=os.environ.get('INFLUXDB_TOKEN'),
+            org=os.environ.get('INFLUXDB_ORG')
         )
 
     return client

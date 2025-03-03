@@ -81,9 +81,9 @@ def connect_to_database():
 
     if client is None:
         client = influxdb_client.InfluxDBClient(
-            os.environ.get('influxdb_host'),
-            token=os.environ.get('influxdb_token'),
-            org=os.environ.get('influxdb_org')
+            os.environ.get('INFLUXDB_URL'),
+            token=os.environ.get('INFLUXDB_TOKEN'),
+            org=os.environ.get('INFLUXDB_ORG')
         )
 
     return client
@@ -105,7 +105,7 @@ def export_to_database(measurement, json_input, date):
              .field("waterLevel", json_input['waterLevel'])
              .time(date, write_precision="s"))
 
-    write_api.write(bucket=os.environ.get('influxdb_bucket'), org=os.environ.get('influxdb_org'), record=point)
+    write_api.write(bucket=os.environ.get('INFLUXDB_BUCKET'), org=os.environ.get('influxdb_org'), record=point)
     write_api.flush()
     write_api.close()
 
@@ -122,7 +122,7 @@ def query_from_database(measurement, stop_time):
 
     start_time = stop_time - timedelta(hours=11)
 
-    query = f"""from(bucket: "{os.environ.get('influxdb_bucket')}")
+    query = f"""from(bucket: "{os.environ.get('INFLUXDB_BUCKET')}")
      |> range(start: time(v: "{str(start_time).replace(" ", "T")}Z"), stop: time(v: "{str(stop_time).replace(" ", "T")}Z"))
      |> filter(fn: (r) => r._measurement == "{measurement}")
      """
