@@ -18,7 +18,6 @@
         faas-cli
         mosquitto
         sshpass
-        faas-cli
       ];
     };
   };
