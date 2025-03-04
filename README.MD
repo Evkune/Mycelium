@@ -18,20 +18,15 @@ This tutorial works best on Linux, especially for the VM part that needs a linux
 4. Run `just` will list all available commands
 7. `just vm` will boot the VM locally
 8. `just ssh` will connect you inside
-10. See it running on k3s with `k9`
+10. See it running on k3s with `k9` (`just ssh` and then `k9`)
 
 Enjoy
 
 # How to use Openfaas ?
 
 1. `just vm`
-2. `just tun`
 3. `just faas-login`
-4. Push a function with `just faas-pub` (consider changing the registry from what I set here)
-5. `just faas-deploy` deploys the function on k3s
-6. `just ssh` to get inside
-7. `mosquitto_pub -h localhost -t sample-topic -m "Hello World!"`
-
-> You can monitor the outputs using the shell alias when you are inside the vm (`j ssh-in`) by typing `k9`
-
-This part performs a deep merge of to generate the full ouputs of the flake (this is pretty useful). You can check all the outputs with `nix flake show`.
+4. Push a function with `just faas-pub` (consider changing the registry from what I set here. By default, the `REGISTRY` env var directs to ttl.sh, a temporary public registry)
+5. You may deploy a single function with `just faas-pub-single <name of the yml file>`
+6. `just mqtt-sub sample-topic` to subscribe to a mqtt topic (`sample-topic`)
+6. `just mqtt-pub sample-topic "Hello World!"` to public on an mqtt topic (`sample-topic`)
