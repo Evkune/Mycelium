@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mqtt-monitoring
+  labels:
+    app: mqtt-monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mqtt-monitoring
+  template:
+    metadata:
+      labels:
+        app: mqtt-monitoring
+    spec:
+      containers:
+      - name: mqtt-monitoring
+        image: docker.io/sky010/mqtt-monitoring:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: gatewayURL
+          value: "http://gateway.openfaas:8080"
+        - name: gw-username
+          value: "admin"
+        - name: gw-password
+          value: "yInlcVgmSbjf"
+        - name: PORT
+          value: "8080"
+        - name: other-monitoring-service
+          value: "http://vps-monitoring-service.router.svc.cluster.local:8080"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: monitoring-service
+spec:
+  selector:
+    app: mqtt-monitoring
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
+  type: ClusterIP

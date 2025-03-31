@@ -2,7 +2,7 @@ export SSHPASS:="myce"
 export SSH_CMD := "sshpass -e ssh -t -oUserKnownHostsFile=/dev/null -oStrictHostKeyChecking=no myce@127.0.0.1 -p 4444"
 
 # Registry for storing images temporarily
-REGISTRY := env_var_or_default('REGISTRY', "ttl.sh/" + `whoami` + "-" + `hostname`)
+REGISTRY := env_var_or_default('REGISTRY', "ttl.sh/" + "whoami")
 
 # Time that the image will be stored in the registry
 TAG := env_var_or_default('TAG', "2h")

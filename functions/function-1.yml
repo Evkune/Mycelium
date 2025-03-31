@@ -1,0 +1,21 @@
+version: 1.0
+provider:
+  name: openfaas
+  gateway: http://127.0.0.1:8080
+functions:
+  function-1: # name of the function
+    lang: python3
+    build_args:
+      PYTHON_VERSION: 3.10
+    handler: ./function-1
+    image: ttl.sh/mycelium/function-1:2h
+    environment:
+      # MQTT Configuration
+      MQTT_CLIENTID: function-1
+      MQTT_BROKER: 10.0.2.15
+      MQTT_PORT: 1883
+      write_debug: true
+    annotations:
+      topic: sensor/entryData
+      functionId: function-1
+      tag : 1.0

@@ -28,114 +28,6 @@ in {
             '';
           };
         };
-        mqtt-connector = {
-          namespace = lib.mkForce "openfaas";
-          overrideNamespace = false;
-          chart = pkgs.stdenvNoCC.mkDerivation {
-            name = "mqtt-connector";
-            src = openfaas;
-
-            buildCommand = ''
-              ls $src
-              cp -r $src/chart/mqtt-connector/ $out
-            '';
-          };
-          values = {
-            broker = "tcp://10.0.2.15:1883";
-            topic = "sample-topic";
-            clientID = "m1";
-          };
-        };
-        mqtt-rawdata = {
-          namespace = lib.mkForce "openfaas";
-          overrideNamespace = false;
-          chart = pkgs.stdenvNoCC.mkDerivation {
-            name = "mqtt-connector";
-            src = openfaas;
-
-            buildCommand = ''
-              ls $src
-              cp -r $src/chart/mqtt-connector/ $out
-            '';
-          };
-          values = {
-            broker = "tcp://10.0.2.15:1883";
-            topic = "rawData";
-            clientID = "m2";
-          };
-        };
-        mqtt-analyseddata = {
-          namespace = lib.mkForce "openfaas";
-          overrideNamespace = false;
-          chart = pkgs.stdenvNoCC.mkDerivation {
-            name = "mqtt-connector";
-            src = openfaas;
-
-            buildCommand = ''
-              ls $src
-              cp -r $src/chart/mqtt-connector/ $out
-            '';
-          };
-          values = {
-            broker = "tcp://10.0.2.15:1883";
-            topic = "analysedData";
-            clientID = "m3";
-          };
-        };
-      mqtt-triggeranalyse= {
-          namespace = lib.mkForce "openfaas";
-          overrideNamespace = false;
-          chart = pkgs.stdenvNoCC.mkDerivation {
-            name = "mqtt-connector";
-            src = openfaas;
-
-            buildCommand = ''
-              ls $src
-              cp -r $src/chart/mqtt-connector/ $out
-            '';
-          };
-          values = {
-            broker = "tcp://10.0.2.15:1883";
-            topic = "triggerAnalyse";
-            clientID = "m4";
-          };
-        };
-      mqtt-triggeralert= {
-          namespace = lib.mkForce "openfaas";
-          overrideNamespace = false;
-          chart = pkgs.stdenvNoCC.mkDerivation {
-            name = "mqtt-connector";
-            src = openfaas;
-
-            buildCommand = ''
-              ls $src
-              cp -r $src/chart/mqtt-connector/ $out
-            '';
-          };
-          values = {
-            broker = "tcp://10.0.2.15:1883";
-            topic = "triggerAlert";
-            clientID = "m5";
-          };
-        };
-      mqtt-secondtopic= {
-          namespace = lib.mkForce "openfaas";
-          overrideNamespace = false;
-          chart = pkgs.stdenvNoCC.mkDerivation {
-            name = "mqtt-connector";
-            src = openfaas;
-
-            buildCommand = ''
-              ls $src
-              cp -r $src/chart/mqtt-connector/ $out
-            '';
-          };
-          values = {
-            broker = "tcp://10.0.2.15:1883";
-            topic = "second-topic";
-            clientID = "m5";
-          };
-        };
       };
       kubernetes.resources.deployments = {
         gateway.spec.template.spec.containers.gateway.image = lib.mkForce "ghcr.io/volodiapg/openfaas/gateway:0.27.2";
@@ -227,6 +119,9 @@ in {
       services = {
         k3s = {
           enable = true;
+          extraFlags = [
+            "--write-kubeconfig-mode=644"
+          ];
         };
 
         # Active le service InfluxDB

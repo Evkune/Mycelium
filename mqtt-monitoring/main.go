@@ -1,0 +1,263 @@
+package main
+
+import (
+	"encoding/json"
+	"io"
+	"log"
+	"net/http"
+	"os"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/openfaas/faas-provider/auth"
+)
+
+type StringTuple struct {
+	First  string
+	Second string
+}
+
+type StringTriple struct {
+	First  string
+	Second string
+	Third  string
+}
+
+var (
+	map_topicFunctions map[string][]string
+	map_functionsTags  map[string][]StringTriple
+	mu                 sync.RWMutex
+)
+
+func listTopicsAndFunctions(gatewayURL string, creds *auth.BasicAuthCredentials) (map[string][]string, map[string][]StringTuple, error) {
+	// Function that fetch the topics and functions from the openfaas gateway
+	client := &http.Client{
+		Timeout: time.Second * 10,
+	}
+
+	req, err := http.NewRequest(http.MethodGet, gatewayURL+"/system/functions", nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	req.SetBasicAuth(creds.User, creds.Password)
+
+	res, err := client.Do(req)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer res.Body.Close()
+
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var functions []map[string]interface{}
+	if err := json.Unmarshal(body, &functions); err != nil {
+		return nil, nil, err
+	}
+
+	topic_func := make(map[string][]string)
+	function_tags := make(map[string][]StringTuple)
+
+	for _, function := range functions {
+		functionName := function["name"].(string) // Name of the function, distinct for every function, used to invoke the function
+		if annotations, ok := function["annotations"].(map[string]interface{}); ok {
+			if functionId, exists := annotations["functionId"]; exists {
+				functionIdStr := functionId.(string) // ID of the function, used to have multiple versions of a same function, ex: a poor version and a good version
+				tag := ""
+				if tagAnnotation, exists := annotations["tag"]; exists {
+					tag = tagAnnotation.(string)
+				}
+				function_tags[functionIdStr] = append(function_tags[functionIdStr], StringTuple{First: tag, Second: functionName})
+				if topicAnnotation, exists := annotations["topic"]; exists {
+					topics := strings.Split(topicAnnotation.(string), ",")
+					for _, topic := range topics {
+						topic_func[topic] = append(topic_func[topic], functionIdStr)
+					}
+				}
+			}
+		}
+	}
+
+	// Remove duplicates from topicFunctions
+	for topic, functionIDs := range topic_func {
+		uniqueFunctionIDs := make(map[string]bool)
+		for _, functionID := range functionIDs {
+			uniqueFunctionIDs[functionID] = true
+		}
+		distinctFunctionIDs := make([]string, 0, len(uniqueFunctionIDs))
+		for functionID := range uniqueFunctionIDs {
+			distinctFunctionIDs = append(distinctFunctionIDs, functionID)
+		}
+		topic_func[topic] = distinctFunctionIDs
+	}
+
+	// Remove duplicates from functionsTags
+	for functionID, tuples := range function_tags {
+		seenTags := make(map[string]bool)
+		uniqueTuples := []StringTuple{}
+
+		for _, tuple := range tuples {
+			if !seenTags[tuple.First] {
+				seenTags[tuple.First] = true
+				uniqueTuples = append(uniqueTuples, tuple)
+			}
+		}
+
+		// Update the map with the unique tuples
+		function_tags[functionID] = uniqueTuples
+	}
+	return topic_func, function_tags, nil
+}
+
+func getOtherRouterFunctions() (map[string][]string, map[string][]StringTuple, error) {
+	other_monitoring_service := os.Getenv("other-monitoring-service")
+	client := &http.Client{
+		Timeout: time.Second * 10,
+	}
+
+	req, err := http.NewRequest(http.MethodGet, other_monitoring_service+"/topics-functions", nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	res, err := client.Do(req)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer res.Body.Close()
+
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var response struct {
+		TopicFunctions map[string][]string      `json:"topics"`
+		FunctionsTags  map[string][]StringTuple `json:"functions"`
+	}
+
+	if err := json.Unmarshal(body, &response); err != nil {
+		return nil, nil, err
+	}
+	return response.TopicFunctions, response.FunctionsTags, nil
+}
+
+func updateTopicsAndFunctions(gatewayURL string, creds *auth.BasicAuthCredentials) {
+	for {
+		newTopicFunctions, newFunctionsTags, err := listTopicsAndFunctions(gatewayURL, creds)
+		newOtherTopic, newOtherFunction, err := getOtherRouterFunctions()
+
+		combinedTopicFunctions := mergeTopicsMaps(newTopicFunctions, newOtherTopic)
+		combinedFunctionsTags := mergeAndTransformFunctionsMaps(newFunctionsTags, newOtherFunction)
+		if err != nil {
+			log.Printf("Error updating topics and functions: %s", err)
+		} else {
+			mu.Lock()
+			map_topicFunctions = combinedTopicFunctions
+			map_functionsTags = combinedFunctionsTags
+			mu.Unlock()
+		}
+		time.Sleep(30 * time.Second)
+	}
+}
+
+func mergeTopicsMaps(map1, map2 map[string][]string) map[string][]string {
+	for k, v := range map2 {
+		if _, exists := map1[k]; !exists {
+			map1[k] = v
+		} else {
+			map1[k] = append(map1[k], v...)
+		}
+	}
+	// Remove duplicates from map1
+	for k, v := range map1 {
+		seen := make(map[string]bool)
+		unique := []string{}
+		for _, function := range v {
+			if !seen[function] {
+				seen[function] = true
+				unique = append(unique, function)
+			}
+		}
+		map1[k] = unique
+	}
+	return map1
+}
+
+func mergeAndTransformFunctionsMaps(map1, map2 map[string][]StringTuple) map[string][]StringTriple {
+    result := make(map[string][]StringTriple)
+
+    // Add all entries from map1
+    for functionId, tuples := range map1 {
+        for _, tuple := range tuples {
+            // Initialize the result map with triplets from map1
+            result[functionId] = append(result[functionId], StringTriple{
+                First:  tuple.First,  // Tag
+                Second: tuple.Second, // Function name
+                Third:  "0",          // Present only in map1
+            })
+        }
+    }
+
+    // Add all entries from map2
+    for functionId, tuples := range map2 {
+        for _, tuple := range tuples {
+            found := false
+            // Check if the same functionId and tag exist in map1
+            for i, existing := range result[functionId] {
+                if existing.First == tuple.First { // Compare tags
+                    // Update the third field to 2 if present in both maps
+                    result[functionId][i].Third = "2"
+                    found = true
+                    break
+                }
+            }
+            if !found {
+                // Add new triplet for entries only in map2
+                result[functionId] = append(result[functionId], StringTriple{
+                    First:  tuple.First,  // Tag
+                    Second: tuple.Second, // Function name
+                    Third:  "1",          // Present only in map2
+                })
+            }
+        }
+    }
+
+    return result
+}
+
+func handler(w http.ResponseWriter, r *http.Request) {
+	mu.RLock()
+	defer mu.RUnlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"topics":    map_topicFunctions,
+		"functions": map_functionsTags,
+	})
+}
+
+func main() {
+	gatewayURL := os.Getenv("gatewayURL")
+	gatewayUsername := os.Getenv("gw-username")
+	gatewayPassword := os.Getenv("gw-password")
+
+	creds := &auth.BasicAuthCredentials{
+		User:     gatewayUsername,
+		Password: gatewayPassword,
+	}
+
+	go updateTopicsAndFunctions(gatewayURL, creds)
+
+	http.HandleFunc("/topics-functions", handler)
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	log.Printf("Starting server on port %s", port)
+	log.Fatal(http.ListenAndServe(":"+port, nil))
+}

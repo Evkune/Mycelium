@@ -4,3 +4,4 @@ result
 build
 .secrets
 scripts/
+mqtt-router/vendor/
