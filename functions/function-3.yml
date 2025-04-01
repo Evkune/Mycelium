@@ -8,7 +8,7 @@ functions:
     build_args:
       PYTHON_VERSION: 3.10
     handler: ./function-3
-    image: ttl.sh/mycelium/function-3:2h
+    image: ttl.sh/arnolec/function-3:2h
     environment:
       # MQTT Configuration
       MQTT_CLIENTID: function-3

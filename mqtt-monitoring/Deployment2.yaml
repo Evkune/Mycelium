@@ -1,13 +1,8 @@
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: router
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: vps-mqtt-monitoring
-  namespace: router
+  name: mqtt-monitoring
+  namespace: openfaas-2
   labels:
     app: mqtt-monitoring
 spec:
@@ -27,21 +22,24 @@ spec:
         - containerPort: 8080
         env:
         - name: gatewayURL
-          value: "http://gateway.openfaas:8080"
+          value: "http://gateway.openfaas-2:8080"
         - name: gw-username
           value: "admin"
         - name: gw-password
-          value: "yInlcVgmSbjf"
+          valueFrom:
+            secretKeyRef:
+              name: basic-auth
+              key: basic-auth-password
         - name: PORT
           value: "8080"
         - name: other-monitoring-service
-          value: "http://monitoring-service.default.svc.cluster.local:8080"
+          value: "http://monitoring-service.openfaas.svc.cluster.local:8080"
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: vps-monitoring-service
-  namespace: router
+  namespace: openfaas-2
 spec:
   selector:
     app: mqtt-monitoring

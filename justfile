@@ -1,8 +1,13 @@
 export SSHPASS:="myce"
 export SSH_CMD := "sshpass -e ssh -t -oUserKnownHostsFile=/dev/null -oStrictHostKeyChecking=no myce@127.0.0.1 -p 4444"
 
+
+# Choose the openfaas endpoint
+OPENFAAS_PORT := env_var_or_default('OPENFAAS_PORT', "8080")
+OPENFAAS := env_var_or_default('OPENFAAS', "http://127.0.0.1:" + OPENFAAS_PORT)
+
 # Registry for storing images temporarily
-REGISTRY := env_var_or_default('REGISTRY', "ttl.sh/" + "whoami")
+REGISTRY := env_var_or_default('REGISTRY', "ttl.sh/" + `whoami`)
 
 # Time that the image will be stored in the registry
 TAG := env_var_or_default('TAG', "2h")
@@ -19,14 +24,14 @@ container:
 ssh:
     @$SSH_CMD
 
-faas-login:
+faas-login namespace="openfaas":
     #!/usr/bin/env bash
-    PASS=$($SSH_CMD sudo kubectl get secret -n openfaas basic-auth -o jsonpath="{.data.basic-auth-password}" | base64 --decode)
-    echo $PASS | $SSH_CMD faas-cli login --password-stdin
+    PASS=$($SSH_CMD sudo kubectl get secret -n {{namespace}} basic-auth -o jsonpath="{.data.basic-auth-password}" | base64 --decode)
+    echo $PASS | $SSH_CMD faas-cli login -g {{OPENFAAS}} --password-stdin
     echo "PASSWORD: $PASS"
 
 # Publish OpenFaaS functions using the registry variables and modify the function file
-faas-pub: faas-login
+faas-pub:
     #!/usr/bin/env bash
     cd {{ justfile_directory() }}/functions
     for file in *.yml; do
@@ -42,8 +47,8 @@ faas-pub-single file:
     sed -i "s|image: .*|image: {{ REGISTRY }}/$(basename {{file}} .yml):{{ TAG }}|" "{{file}}"
     {{SSH_CMD}} << EOF
     cd /home/myce/mycelium/functions
-    faas-cli publish -f "{{file}}"
-    faas-cli deploy -f "{{file}}"
+    faas-cli publish -g {{OPENFAAS}} -f "{{file}}"
+    faas-cli deploy -g {{OPENFAAS}} -f "{{file}}"
     EOF
 
 mqtt-pub topic message:

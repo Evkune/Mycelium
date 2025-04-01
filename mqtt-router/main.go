@@ -21,11 +21,6 @@ import (
 	"github.com/openfaas/faas-provider/auth"
 )
 
-type StringTuple struct {
-	First  string
-	Second string
-}
-
 type StringTriple struct {
 	First  string
 	Second string
@@ -43,10 +38,11 @@ var (
 
 	functionTags map[string][]StringTriple // Maps of function_id in keys and tuple of tags and function_name in values
 	topicFunctions map[string][]string // Map of topics in keys and functions (Function_id) in values
+	synchronized_routers bool // Indicates if the router is synchronized
 	creds *auth.BasicAuthCredentials // Credentials for openfaas gateway
 )
 
-func getTopicsAndFunctions(url_monitoring string) (map[string][]string, map[string][]StringTriple, error) {
+func getTopicsAndFunctions(url_monitoring string) (map[string][]string, map[string][]StringTriple, bool, error) {
 	// Get the topics and functions from the monitoring service
 	log.Printf("Getting topics and functions from: %s", url_monitoring)
 	resp, err := http.Get(url_monitoring + "/topics-functions")
@@ -63,13 +59,14 @@ func getTopicsAndFunctions(url_monitoring string) (map[string][]string, map[stri
 	var response struct {
 		TopicFunctions map[string][]string      `json:"topics"`
 		FunctionsTags  map[string][]StringTriple `json:"functions"`
+		synchronized_routers bool `json:"synchronized"`
 	}
 
 	if err := json.Unmarshal(body, &response); err != nil {
 		return nil, nil, err
 	}
 
-	return response.TopicFunctions, response.FunctionsTags, nil
+	return response.TopicFunctions, response.FunctionsTags, response.synchronized, nil
 }
 
 func invokeFunction(functionName, message string) error {
@@ -106,7 +103,7 @@ func invokingFromTopic(topic string, message string) error {
 	}
 
 	for _, function := range functions {
-		functionToInvoke := ""
+		functionToInvoke := make([]StringTriple, 0)
 		max := 0.0
 		for _, tag := range functionTags[function] {
 			tagFloat, err := strconv.ParseFloat(tag.First, 64)
@@ -115,11 +112,14 @@ func invokingFromTopic(topic string, message string) error {
 			}
 			if (tagFloat > max){
 				max = tagFloat
-				functionToInvoke = tag.Second
+				functionToInvoke = tag
 			}
 		}
+		if functionToInvoke.Third == "2" {
+			// Logic to handle when both routers have the function and the same tag
+		}
 		fmt.Println("Function invoked:", functionToInvoke)
-		invokeFunction(functionToInvoke, message)
+		invokeFunction(functionToInvoke.Second, message)
 		
 	}
 	return nil
@@ -194,9 +194,10 @@ func main() {
 	controller.Subscribe(&receiver)
 
 	log.Println("Listing deployed functions and their topics:")
-	res_map_topics, res_map_functions, err := getTopicsAndFunctions(os.Getenv("url-monitoring"))
+	res_map_topics, res_map_functions, res_synchronized, err := getTopicsAndFunctions(os.Getenv("url-monitoring"))
 	topicFunctions = res_map_topics
 	functionTags = res_map_functions
+	synchronized_routers = res_synchronized
 	if err != nil {
 		log.Printf("Error listing functions: %s", err)
 	} else {

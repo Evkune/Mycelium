@@ -25,7 +25,10 @@ spec:
         - name: gw-username
           value: "admin"
         - name: gw-password
-          value: "yInlcVgmSbjf" # Gateway password obtained by running sudo kubectl get secret -n openfaas basic-auth -o jsonpath="{.data.basic-auth-password}" | base64 --decode
+          valueFrom:
+            secretKeyRef:
+              name: basic-auth
+              key: basic-auth-password
         - name: gw-flag
           value: "http://gateway.openfaas:8080"
         - name: url-monitoring

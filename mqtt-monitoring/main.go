@@ -27,6 +27,7 @@ type StringTriple struct {
 var (
 	map_topicFunctions map[string][]string
 	map_functionsTags  map[string][]StringTriple
+	synchronized_routers bool
 	mu                 sync.RWMutex
 )
 
@@ -149,18 +150,37 @@ func getOtherRouterFunctions() (map[string][]string, map[string][]StringTuple, e
 func updateTopicsAndFunctions(gatewayURL string, creds *auth.BasicAuthCredentials) {
 	for {
 		newTopicFunctions, newFunctionsTags, err := listTopicsAndFunctions(gatewayURL, creds)
-		newOtherTopic, newOtherFunction, err := getOtherRouterFunctions()
-
-		combinedTopicFunctions := mergeTopicsMaps(newTopicFunctions, newOtherTopic)
-		combinedFunctionsTags := mergeAndTransformFunctionsMaps(newFunctionsTags, newOtherFunction)
 		if err != nil {
-			log.Printf("Error updating topics and functions: %s", err)
-		} else {
+			log.Printf("Error fetching this router functions: %s", err)
+		}
+		newOtherTopic, newOtherFunction, err := getOtherRouterFunctions()
+		if err != nil {
+			log.Printf("Error fetching other router functions: %s", err)
 			mu.Lock()
-			map_topicFunctions = combinedTopicFunctions
-			map_functionsTags = combinedFunctionsTags
+			synchronized_routers = false
+			mu.Unlock()
+		}else {
+			mu.Lock()
+			synchronized_routers = true
 			mu.Unlock()
 		}
+		combinedTopicFunctions := mergeTopicsMaps(newTopicFunctions, newOtherTopic)
+		combinedFunctionsTags := mergeAndTransformFunctionsMaps(newFunctionsTags, newOtherFunction)
+		mu.Lock()
+		map_topicFunctions = combinedTopicFunctions
+		map_functionsTags = combinedFunctionsTags
+		mu.Unlock()
+		
+		log.Printf("Updated topics and functions: %d topics, %d functions", len(map_topicFunctions), len(map_functionsTags))
+		/*
+		for topic, functions := range map_topicFunctions {
+			log.Printf("Topic: %s, Functions: %v", topic, functions)
+		}
+		for functionId, tuples := range map_functionsTags {
+			log.Printf("Function ID: %s, Tags: %v", functionId, tuples)
+		}
+		log.Printf("Synchronized with other router: %t", synchronized_routers)
+		*/
 		time.Sleep(30 * time.Second)
 	}
 }
@@ -238,6 +258,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"topics":    map_topicFunctions,
 		"functions": map_functionsTags,
+		"synchronized": synchronized_routers,
 	})
 }
 
