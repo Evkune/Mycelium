@@ -6,6 +6,9 @@ export SSH_CMD := "sshpass -e ssh -t -oUserKnownHostsFile=/dev/null -oStrictHost
 OPENFAAS_PORT := env_var_or_default('OPENFAAS_PORT', "8080")
 OPENFAAS := env_var_or_default('OPENFAAS', "http://127.0.0.1:" + OPENFAAS_PORT)
 
+# Choose the mosquitto port
+MQTT_PORT := env_var_or_default('MQTT_PORT', "1883")
+
 # Registry for storing images temporarily
 REGISTRY := env_var_or_default('REGISTRY', "ttl.sh/" + `whoami`)
 
@@ -52,10 +55,10 @@ faas-pub-single file:
     EOF
 
 mqtt-pub topic message:
-    mosquitto_pub -h 127.0.0.1 -p 1883 -t "{{ topic }}" -m "{{ message }}"
+    mosquitto_pub -h 127.0.0.1 -p {{MQTT_PORT}} -t "{{ topic }}" -m "{{ message }}"
 
 mqtt-sub topic:
-    mosquitto_sub -h 127.0.0.1 -p 1883 -t "{{ topic }}"
+    mosquitto_sub -h 127.0.0.1 -p {{MQTT_PORT}} -t "{{ topic }}"
 
 vm:
     #!/usr/bin/env bash

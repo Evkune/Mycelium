@@ -178,19 +178,6 @@ in {
             enable = true;
             package = pkgs.influxdb2-server;
           };
-          mosquitto = {
-            enable = true;
-
-            listeners = [
-              {
-                address = "0.0.0.0";
-                port = 1883;
-                settings.allow_anonymous = true;
-                omitPasswordAuth = true;
-                acl = ["topic readwrite #" "pattern readwrite #"];
-              }
-            ];
-          };
         };
 
         environment = {
@@ -216,6 +203,24 @@ in {
           namespace = "openfaas-2";
           openfaas_port = 8082;
         })
+        {
+          services.mosquitto = let
+            mkMosquitto = port: {
+              inherit port;
+              address = "0.0.0.0";
+              settings.allow_anonymous = true;
+              omitPasswordAuth = true;
+              acl = ["topic readwrite #" "pattern readwrite #"];
+            };
+          in {
+            enable = true;
+
+            listeners = [
+              (mkMosquitto 1883)
+              (mkMosquitto 1884)
+            ];
+          };
+        }
       ];
   };
 }
