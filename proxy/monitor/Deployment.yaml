@@ -33,27 +33,27 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: mqtt-monitoring
+  name: monitor
   namespace: openfaas
   labels:
-    app: mqtt-monitoring
+    app: proxy-monitor
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: mqtt-monitoring
+      app: proxy-monitor
   template:
     metadata:
       labels:
-        app: mqtt-monitoring
+        app: proxy-monitor
     spec:
       containers:
       - name: mqtt-monitoring
-        image: docker.io/sky010/mqtt-monitoring:latest
+        image: docker.io/sky010/proxy-monitor:latest
         ports:
         - containerPort: 8080
         env:
-        - name: gatewayURL
+        - name: gw-url
           value: "http://gateway.openfaas:8080"
         - name: gw-username
           value: "admin"
@@ -75,7 +75,7 @@ metadata:
   namespace: openfaas
 spec:
   selector:
-    app: mqtt-monitoring
+    app: proxy-monitor
   ports:
     - protocol: TCP
       port: 8080

@@ -3,36 +3,45 @@ package main
 import (
 	"encoding/json"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"strings"
 	"sync"
 	"time"
+	"fmt"
 
 	"github.com/openfaas/faas-provider/auth"
 )
 
-type StringTuple struct {
-	First  string
-	Second string
+type FunctionTuple struct {
+	Tag  string
+	FunctionName string
 }
 
-type StringTriple struct {
-	First  string
-	Second string
-	Third  string
+type FunctionData struct {
+	Tag  string
+	FunctionName string
+	Presence  string
 }
 
 var (
 	map_topicFunctions map[string][]string
-	map_functionsTags  map[string][]StringTriple
+	map_functionsTags  map[string][]FunctionData
 	synchronized_routers bool
 	mu                 sync.RWMutex
 )
 
-func listTopicsAndFunctions(gatewayURL string, creds *auth.BasicAuthCredentials) (map[string][]string, map[string][]StringTuple, error) {
+func listTopicsAndFunctions() (map[string][]string, map[string][]FunctionTuple, error) {
 	// Function that fetch the topics and functions from the openfaas gateway
+	gatewayURL := os.Getenv("gw-url")
+	gatewayUsername := os.Getenv("gw-username")
+	gatewayPassword := os.Getenv("gw-password")
+
+	creds := &auth.BasicAuthCredentials{
+		User:     gatewayUsername,
+		Password: gatewayPassword,
+	}
+
 	client := &http.Client{
 		Timeout: time.Second * 10,
 	}
@@ -61,7 +70,7 @@ func listTopicsAndFunctions(gatewayURL string, creds *auth.BasicAuthCredentials)
 	}
 
 	topic_func := make(map[string][]string)
-	function_tags := make(map[string][]StringTuple)
+	function_tags := make(map[string][]FunctionTuple)
 
 	for _, function := range functions {
 		functionName := function["name"].(string) // Name of the function, distinct for every function, used to invoke the function
@@ -72,7 +81,7 @@ func listTopicsAndFunctions(gatewayURL string, creds *auth.BasicAuthCredentials)
 				if tagAnnotation, exists := annotations["tag"]; exists {
 					tag = tagAnnotation.(string)
 				}
-				function_tags[functionIdStr] = append(function_tags[functionIdStr], StringTuple{First: tag, Second: functionName})
+				function_tags[functionIdStr] = append(function_tags[functionIdStr], FunctionTuple{Tag: tag, FunctionName: functionName})
 				if topicAnnotation, exists := annotations["topic"]; exists {
 					topics := strings.Split(topicAnnotation.(string), ",")
 					for _, topic := range topics {
@@ -99,11 +108,11 @@ func listTopicsAndFunctions(gatewayURL string, creds *auth.BasicAuthCredentials)
 	// Remove duplicates from functionsTags
 	for functionID, tuples := range function_tags {
 		seenTags := make(map[string]bool)
-		uniqueTuples := []StringTuple{}
+		uniqueTuples := []FunctionTuple{}
 
 		for _, tuple := range tuples {
-			if !seenTags[tuple.First] {
-				seenTags[tuple.First] = true
+			if !seenTags[tuple.Tag] {
+				seenTags[tuple.Tag] = true
 				uniqueTuples = append(uniqueTuples, tuple)
 			}
 		}
@@ -114,7 +123,7 @@ func listTopicsAndFunctions(gatewayURL string, creds *auth.BasicAuthCredentials)
 	return topic_func, function_tags, nil
 }
 
-func getOtherRouterFunctions() (map[string][]string, map[string][]StringTuple, error) {
+func getOtherRouterFunctions() (map[string][]string, map[string][]FunctionTuple, error) {
 	other_monitoring_service := os.Getenv("other-monitoring-service")
 	client := &http.Client{
 		Timeout: time.Second * 10,
@@ -138,7 +147,7 @@ func getOtherRouterFunctions() (map[string][]string, map[string][]StringTuple, e
 
 	var response struct {
 		TopicFunctions map[string][]string      `json:"topics"`
-		FunctionsTags  map[string][]StringTuple `json:"functions"`
+		FunctionsTags  map[string][]FunctionTuple `json:"functions"`
 	}
 
 	if err := json.Unmarshal(body, &response); err != nil {
@@ -147,15 +156,15 @@ func getOtherRouterFunctions() (map[string][]string, map[string][]StringTuple, e
 	return response.TopicFunctions, response.FunctionsTags, nil
 }
 
-func updateTopicsAndFunctions(gatewayURL string, creds *auth.BasicAuthCredentials) {
+func updateTopicsAndFunctions() {
 	for {
-		newTopicFunctions, newFunctionsTags, err := listTopicsAndFunctions(gatewayURL, creds)
+		newTopicFunctions, newFunctionsTags, err := listTopicsAndFunctions()
 		if err != nil {
-			log.Printf("Error fetching this router functions: %s", err)
+			fmt.Println("Error fetching this router functions: %s", err)
 		}
 		newOtherTopic, newOtherFunction, err := getOtherRouterFunctions()
 		if err != nil {
-			log.Printf("Error fetching other router functions: %s", err)
+			fmt.Println("Error fetching other router functions: %s", err)
 			mu.Lock()
 			synchronized_routers = false
 			mu.Unlock()
@@ -171,7 +180,7 @@ func updateTopicsAndFunctions(gatewayURL string, creds *auth.BasicAuthCredential
 		map_functionsTags = combinedFunctionsTags
 		mu.Unlock()
 		
-		log.Printf("Updated topics and functions: %d topics, %d functions", len(map_topicFunctions), len(map_functionsTags))
+		fmt.Println("Updated topics and functions: %d topics, %d functions", len(map_topicFunctions), len(map_functionsTags))
 		/*
 		for topic, functions := range map_topicFunctions {
 			log.Printf("Topic: %s, Functions: %v", topic, functions)
@@ -208,17 +217,17 @@ func mergeTopicsMaps(map1, map2 map[string][]string) map[string][]string {
 	return map1
 }
 
-func mergeAndTransformFunctionsMaps(map1, map2 map[string][]StringTuple) map[string][]StringTriple {
-    result := make(map[string][]StringTriple)
+func mergeAndTransformFunctionsMaps(map1, map2 map[string][]FunctionTuple) map[string][]FunctionData {
+    result := make(map[string][]FunctionData)
 
     // Add all entries from map1
     for functionId, tuples := range map1 {
         for _, tuple := range tuples {
             // Initialize the result map with triplets from map1
-            result[functionId] = append(result[functionId], StringTriple{
-                First:  tuple.First,  // Tag
-                Second: tuple.Second, // Function name
-                Third:  "0",          // Present only in map1
+            result[functionId] = append(result[functionId], FunctionData{
+                Tag:  tuple.Tag,  // Tag
+                FunctionName: tuple.FunctionName, // Function name
+                Presence:  "0",          // Present only in map1
             })
         }
     }
@@ -229,26 +238,26 @@ func mergeAndTransformFunctionsMaps(map1, map2 map[string][]StringTuple) map[str
             found := false
             // Check if the same functionId and tag exist in map1
             for i, existing := range result[functionId] {
-                if existing.First == tuple.First { // Compare tags
+                if existing.Tag == tuple.Tag { // Compare tags
                     // Update the third field to 2 if present in both maps
-                    result[functionId][i].Third = "2"
+                    result[functionId][i].Presence = "2"
                     found = true
                     break
                 }
             }
             if !found {
                 // Add new triplet for entries only in map2
-                result[functionId] = append(result[functionId], StringTriple{
-                    First:  tuple.First,  // Tag
-                    Second: tuple.Second, // Function name
-                    Third:  "1",          // Present only in map2
+                result[functionId] = append(result[functionId], FunctionData{
+                    Tag:  tuple.Tag,  // Tag
+                    FunctionName: tuple.FunctionName, // Function name
+                    Presence:  "1",          // Present only in map2
                 })
             }
         }
     }
 
     return result
-}
+} 
 
 func handler(w http.ResponseWriter, r *http.Request) {
 	mu.RLock()
@@ -263,22 +272,13 @@ func handler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	gatewayURL := os.Getenv("gatewayURL")
-	gatewayUsername := os.Getenv("gw-username")
-	gatewayPassword := os.Getenv("gw-password")
-
-	creds := &auth.BasicAuthCredentials{
-		User:     gatewayUsername,
-		Password: gatewayPassword,
-	}
-
-	go updateTopicsAndFunctions(gatewayURL, creds)
+	go updateTopicsAndFunctions()
 
 	http.HandleFunc("/topics-functions", handler)
-	port := os.Getenv("PORT")
+	port := os.Getenv("port")
 	if port == "" {
 		port = "8080"
 	}
-	log.Printf("Starting server on port %s", port)
-	log.Fatal(http.ListenAndServe(":"+port, nil))
+	fmt.Println("Starting server on port %s", port)
+	fmt.Println(http.ListenAndServe(":"+port, nil))
 }
