@@ -48,6 +48,7 @@ faas-pub-single file:
     #!/usr/bin/env bash
     cd {{ justfile_directory() }}/functions
     sed -i "s|image: .*|image: {{ REGISTRY }}/$(basename {{file}} .yml):{{ TAG }}|" "{{file}}"
+    sed -i "s|MQTT_PORT: .*|MQTT_PORT: {{ MQTT_PORT }}|" "{{file}}"
     {{SSH_CMD}} << EOF
     cd /home/myce/mycelium/functions
     faas-cli publish -g {{OPENFAAS}} -f "{{file}}"
