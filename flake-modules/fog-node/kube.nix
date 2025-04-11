@@ -47,6 +47,7 @@ in {
         position,
         namespace,
         openfaas_port,
+        mosquitto_port,
       }: {
         environment.etc = {
           "mycelium/${builtins.toString (position + 1)}_kubenix.json".source =
@@ -98,6 +99,50 @@ in {
             Restart = "on-failure";
             RestartSec = "5s";
           };
+        };
+
+        systemd.services."mosquitto-${toString mosquitto_port}" = {
+          description = "Mosquitto MQTT Broker (${toString mosquitto_port})";
+          wantedBy = ["multi-user.target"];
+          after = ["network.target"];
+          serviceConfig = {
+            Type = "simple";
+            User = "mosquitto";
+            Group = "mosquitto";
+            ExecStart = "${pkgs.mosquitto}/bin/mosquitto -c /etc/mosquitto-${toString mosquitto_port}/mosquitto.conf";
+            Restart = "on-failure";
+            RestartSec = "5s";
+          };
+        };
+
+        # Create config files for each instance
+        environment.etc = {
+          "mosquitto-${toString mosquitto_port}/acl.conf" = {
+            mode = "0644";
+            text = ''
+              topic readwrite #
+              pattern readwrite #
+            '';
+          };
+          "mosquitto-${toString mosquitto_port}/mosquitto.conf" = {
+            text = ''
+              per_listener_settings true
+              persistence true
+              log_dest stderr
+              listener ${toString mosquitto_port} 0.0.0.0
+              acl_file /etc/mosquitto-${toString mosquitto_port}/acl.conf
+              allow_anonymous true'';
+          };
+        };
+
+        # Create the mosquitto user/group
+        users.users.mosquitto = {
+          description = "Mosquitto MQTT broker user";
+          group = "mosquitto";
+          isSystemUser = true;
+        };
+
+        users.groups.mosquitto = {
         };
       };
       module = {
@@ -178,19 +223,6 @@ in {
             enable = true;
             package = pkgs.influxdb2-server;
           };
-          mosquitto = {
-            enable = true;
-
-            listeners = [
-              {
-                address = "0.0.0.0";
-                port = 1883;
-                settings.allow_anonymous = true;
-                omitPasswordAuth = true;
-                acl = ["topic readwrite #" "pattern readwrite #"];
-              }
-            ];
-          };
         };
 
         environment = {
@@ -210,11 +242,13 @@ in {
           position = 10;
           namespace = "openfaas";
           openfaas_port = 8080;
+          mosquitto_port = 1883;
         })
         (mkOpenFaaS {
           position = 20;
           namespace = "openfaas-2";
           openfaas_port = 8082;
+          mosquitto_port = 1884;
         })
       ];
   };

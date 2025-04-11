@@ -94,6 +94,12 @@
                     host.port = 8082;
                     guest.port = 8082;
                   }
+                  # Mosquitto 2
+                  {
+                    from = "host";
+                    host.port = 1884;
+                    guest.port = 1884;
+                  }
                 ];
                 memorySize = 4096;
                 cores = 4;

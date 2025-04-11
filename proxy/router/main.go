@@ -136,10 +136,13 @@ func routing(topic string, message string) error {
 		if functionToInvoke.Presence == "2" {
 			// Logic to handle when both routers have the function and the same tag
 			postInvocation(functionToInvoke.FunctionName, message, 1)
+		} else if functionToInvoke.Presence == "1" {
+			postInvocation(functionToInvoke.FunctionName, message, 1)
+		} else {
+			postInvocation(functionToInvoke.FunctionName, message, 0)
 		}
 		fmt.Println("Function invoked:", functionToInvoke)
-		postInvocation(functionToInvoke.FunctionName, message, 0)
-		
+
 	}
 	return nil
 }
