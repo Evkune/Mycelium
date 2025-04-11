@@ -33,7 +33,7 @@ spec:
         - name: client-id
           value: "routerVPS"
         - name: broker
-          value: "tcp://10.0.2.15:1883"
+          value: "tcp://10.0.2.15:1884"
         - name: url-monitoring
           value: "http://vps-monitoring-service.openfaas-2.svc.cluster.local:8080"
         - name: url-invoker
