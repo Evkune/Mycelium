@@ -1,34 +1,27 @@
-# Utile probablement pour récupérer les métriques
-# apiVersion: v1 
-# kind: ServiceAccount
-# metadata:
-#   name: fog-node
-#   namespace: openfaas
-
-# ---
-# apiVersion: rbac.authorization.k8s.io/v1
-# kind: ClusterRole
-# metadata:
-#   name: fog-node
-#   namespace: openfaas
-# rules:
-#   - apiGroups: ["metrics.k8s.io", ""]
-#     resources: ["pods", "nodes"]
-#     verbs: ["get", "list", "watch"]
-# ---
-# kind: ClusterRoleBinding
-# apiVersion: rbac.authorization.k8s.io/v1
-# metadata:
-#   name: fog-node
-#   namespace: openfaas
-# subjects:
-# - kind: ServiceAccount
-#   name: fog-node
-#   namespace: openfaas
-# roleRef:
-#   kind: ClusterRole
-#   name: fog-node
-#   apiGroup: rbac.authorization.k8s.io
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: metrics-reader
+rules:
+- apiGroups: ["metrics.k8s.io"]
+  resources: ["nodes"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["nodes"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: metrics-reader-binding
+subjects:
+- kind: ServiceAccount
+  name: default
+  namespace: openfaas
+roleRef:
+  kind: ClusterRole
+  name: metrics-reader
+  apiGroup: rbac.authorization.k8s.io
 ---
 apiVersion: apps/v1
 kind: Deployment

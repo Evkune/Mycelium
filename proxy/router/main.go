@@ -4,21 +4,18 @@
 package main
 
 import (
-	"flag"
 	"fmt"
-	"io"
 	"log"
-	"net/http"
-	"os"
 	"strings"
-	"time"
 	"strconv"
-
+	"sync"
+	"io"
+	"os"
+	"time"
+	"net/http"
 	"encoding/json"
 
 	MQTT "github.com/eclipse/paho.mqtt.golang"
-	"github.com/openfaas/connector-sdk/types"
-	"github.com/openfaas/faas-provider/auth"
 )
 
 type FunctionData struct {
@@ -28,10 +25,6 @@ type FunctionData struct {
 }
 
 var (
-	gatewayUsername string
-	gatewayPassword string
-	gatewayURL      string
-
 	monitoringURL string
 	invokerURL string
 	otherInvokerURL string
@@ -42,38 +35,65 @@ var (
 	functionTags map[string][]FunctionData // Maps of function_id in keys and tuple of tags and function_name in values
 	topicFunctions map[string][]string // Map of topics in keys and functions (Function_id) in values
 	synchronized_routers bool // Indicates if the router is synchronized
-	creds *auth.BasicAuthCredentials // Credentials for openfaas gateway
+	cpuUsage float64 // CPU usage of the router
+	memoryUsage float64 // Memory usage of the router
+	mu sync.RWMutex
+	once sync.Once
 )
 
-func getTopicsAndFunctions() error{
-	// Get the topics and functions from the monitoring service
-	log.Printf("Getting topics and functions from: %s", monitoringURL)
-	resp, err := http.Get(monitoringURL + "/topics-functions")
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
+func getTopicsAndFunctions() {
+	for {
+		time.Sleep(30 * time.Second)
+		// Get the topics and functions from the monitoring service
+		log.Printf("Getting topics and functions from: %s", monitoringURL)
+		resp, err := http.Get(monitoringURL + "/topics-functions")
+		if err != nil {
+			log.Printf("Error getting topics and functions: %s", err)
+			continue
+		}
+		defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			log.Printf("Error reading response body: %s", err)
+			continue
+		}
 
-	var response struct {
-		TopicFunctions map[string][]string      `json:"topics"`
-		FunctionsTags  map[string][]FunctionData `json:"functions"`
-		synchronized_routers bool `json:"synchronized"`
-	}
+		var response struct {
+			TopicFunctions map[string][]string      `json:"topics"`
+			FunctionsTags  map[string][]FunctionData `json:"functions"`
+			SynchronizedRouters bool `json:"synchronized"`
+			CPUUsage float64 `json:"cpu"`
+			MemoryUsage float64 `json:"memory"`
+		}
 
-	err = json.Unmarshal(body, &response)
-	if  err != nil {
-		return err
-	}
-	synchronized_routers = response.synchronized_routers
-	functionTags = response.FunctionsTags
-	topicFunctions = response.TopicFunctions
+		err = json.Unmarshal(body, &response)
+		if  err != nil {
+			log.Printf("Error unmarshalling JSON: %s \n", err)
+			continue
+		}
+		mu.Lock()
+		synchronized_routers = response.SynchronizedRouters
+		functionTags = response.FunctionsTags
+		topicFunctions = response.TopicFunctions
+		cpuUsage = response.CPUUsage
+		memoryUsage = response.MemoryUsage
+		mu.Unlock()
 
-	return nil
+        // Ensure this block runs only once
+        once.Do(func() {
+            log.Printf("First iteration of getTopicsAndFunctions completed")
+            for topic, functions := range topicFunctions {
+                log.Printf("Topics: %s, Functions: %s", topic, strings.Join(functions, ", "))
+            }
+            for functionID, tags := range functionTags {
+                log.Printf("Function ID: %s, Tags: %v", functionID, tags)
+            }
+			log.Printf("Synchronized Routers: %t", synchronized_routers)
+			log.Printf("CPU Usage: %f", cpuUsage)
+			log.Printf("Memory Usage: %f", memoryUsage)
+        })
+	}
 }
 
 func postInvocation(functionName string, message string, invoker int) error {
@@ -84,7 +104,7 @@ func postInvocation(functionName string, message string, invoker int) error {
 	} else {
 		url = fmt.Sprintf("%s/invoke?function=%s", otherInvokerURL, functionName)
 	}
-	fmt.Println("Posting invocation to:", url)
+	log.Printf("Posting invocation to: %s", url)
 	req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(message))
 	if err != nil {
 		return err
@@ -101,12 +121,14 @@ func postInvocation(functionName string, message string, invoker int) error {
 	}
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusOK {
-		return fmt.Errorf("unexpected status code: %d", res.StatusCode)
+		return fmt.Errorf("Error sending function %s: %s", functionName, res.Status)
 	}
 	return nil
 }
 
 func routing(topic string, message string) error {
+	mu.RLock()
+	defer mu.RUnlock()
 	// Invokes the greatest tag of all the functions subscribed to the topic
 	functions, ok := topicFunctions[topic]
 	if !ok {
@@ -124,7 +146,7 @@ func routing(topic string, message string) error {
 		for _, functionTuple := range functionTags[function] {
 			tagFloat, err := strconv.ParseFloat(functionTuple.Tag, 64)
 			if err != nil {
-				fmt.Println("Error converting:", err)
+				log.Printf("Error converting tag to float: %s", functionTuple.Tag)
 			}
 			if (tagFloat > max){
 				max = tagFloat
@@ -135,15 +157,21 @@ func routing(topic string, message string) error {
 		}
 		if functionToInvoke.Presence == "2" {
 			// Logic to handle when both routers have the function and the same tag
-			postInvocation(functionToInvoke.FunctionName, message, 1)
+			if cpuUsage > 80 ||  memoryUsage > 80 {
+				log.Printf("Cluster overloaded, invoking function: %s with tag: %s", functionToInvoke.FunctionName, functionToInvoke.Tag)
+				postInvocation(functionToInvoke.FunctionName, message, 1)
+			} else {
+				randomInt := int(time.Now().UnixNano() % 2)
+				postInvocation(functionToInvoke.FunctionName, message, randomInt)
+			}
 		} else if functionToInvoke.Presence == "1" {
 			postInvocation(functionToInvoke.FunctionName, message, 1)
 		} else {
 			postInvocation(functionToInvoke.FunctionName, message, 0)
 		}
-		fmt.Println("Function invoked:", functionToInvoke)
-
+		log.Printf("Invoking function: %s with tag: %s", functionToInvoke.FunctionName, functionToInvoke.Tag)
 	}
+
 	return nil
 }
 
@@ -159,10 +187,6 @@ func contains(slice []string, value string) bool {
 }
 
 func main() {
-	gatewayUsername = os.Getenv("gw-username")
-	gatewayPassword = os.Getenv("gw-password")
-	gatewayURL = os.Getenv("gw-url")
-
 	monitoringURL = os.Getenv("url-monitoring")
 	invokerURL = os.Getenv("url-invoker")
 	otherInvokerURL = os.Getenv("url-other-invoker")
@@ -176,60 +200,8 @@ func main() {
 	qos := 0
 	topic = "#"
 
-	flag.Parse()
-
-	if len(gatewayPassword) > 0 {
-		log.Printf("Trying gateway credentials from env")
-		creds = &auth.BasicAuthCredentials{
-			User:     gatewayUsername,
-			Password: gatewayPassword,
-		}
-	} else {
-		creds = types.GetCredentials()
-	}
-
-	contentType := "application/json"
-	if v, exists := os.LookupEnv("content_type"); exists && len(v) > 0 {
-		contentType = v
-	}
-
-	if len(gatewayURL) == 0 {
-		log.Panicln(`a value must be set for env "gatewayURL" or via the -gateway flag for your OpenFaaS gateway`)
-		return
-	}
-
-	config := &types.ControllerConfig{
-		RebuildInterval:          time.Millisecond * 1000,
-		GatewayURL:               gatewayURL,
-		PrintResponse:            true,
-		PrintResponseBody:        true,
-		TopicAnnotationDelimiter: ",",
-		AsyncFunctionInvocation:  false,
-		ContentType:              contentType,
-	}
-
-	log.Printf("Topic: %q\tBroker: %q\n", topic, broker)
-	log.Printf("Gateway: %s\n", gatewayURL)
-
-	controller := types.NewController(creds, config)
-
-	receiver := ResponseReceiver{}
-	controller.Subscribe(&receiver)
-
-	log.Println("Listing deployed functions and their topics:")
-	err := getTopicsAndFunctions()
-	if err != nil {
-		log.Printf("Error listing functions: %s", err)
-	} else {
-		for topic, functions := range topicFunctions {
-			log.Printf("Topics: %s, Functions: %s", topic, strings.Join(functions, ", "))
-		}
-		for functionID, tags := range functionTags {
-			log.Printf("Function ID: %s, Tags: %v", functionID, tags)
-		}
-	}
-	controller.BeginMapBuilder()
-
+	go getTopicsAndFunctions()
+	
 	opts := MQTT.NewClientOptions()
 	opts.AddBroker(broker)
 	opts.SetClientID(id)
@@ -268,11 +240,11 @@ func main() {
 			topic := incoming[0]
 			data := []byte(incoming[1])
 			
-			list_topics := make([]string, 0)
+			topicsList := make([]string, 0)
 			for key, _ := range topicFunctions {
-				list_topics = append(list_topics, key)
+				topicsList = append(topicsList, key)
 			}
-			if !contains(list_topics, topic) {
+			if !contains(topicsList, topic) {
 				log.Printf("Topic not found: %s", topic)
 				continue
 			}
@@ -285,19 +257,4 @@ func main() {
 	}()
 
 	select {}
-}
-
-// ResponseReceiver enables connector to receive results from the
-// function invocation
-type ResponseReceiver struct {
-}
-
-// Response is triggered by the controller when a message is
-// received from the function invocation
-func (ResponseReceiver) Response(res types.InvokerResponse) {
-	if res.Error != nil {
-		log.Printf("tester got error: %s", res.Error.Error())
-	} else {
-		log.Printf("tester got result: [%d] %s => %s (%d) bytes", res.Status, res.Topic, res.Function, len(*res.Body))
-	}
 }

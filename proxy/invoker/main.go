@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 	"fmt"
+	"log"
 	"github.com/openfaas/faas-provider/auth"
 )
 
@@ -19,25 +20,21 @@ type FailedInvokation struct {
 }
 
 var (
-	failedMessages map[int]FailedInvokation
 	gatewayURL string
-	gatewayUsername string
-	gatewayPassword string
-	
-	uniqueID int
-	mu sync.RWMutex
-
 	creds *auth.BasicAuthCredentials
-	
+
+	failedMessages map[int]FailedInvokation
+	uniqueID int
+	mu sync.RWMutex	
 )
 
 func invokeFunction(functionName, message string) error {
 	// Invoke the function with the message
 	url := fmt.Sprintf("%s/function/%s", gatewayURL, functionName)
 	req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(message))
-	fmt.Println("Invoking function:", functionName)
+	log.Printf("Invoking function: %s", functionName)
 	if err != nil {
-		fmt.Println("Error creating request:", err)
+		log.Printf("Error creating request: %s", err)
 		return err
 	}
 	req.SetBasicAuth(creds.User, creds.Password)
@@ -61,31 +58,36 @@ func invokeFunction(functionName, message string) error {
 func invokingFailedFunctions() {
 	for {
 		mu.Lock()
+		var toDelete []int // Track IDs to delete after iteration
 		for id, failedInvokation := range failedMessages {
 			err := invokeFunction(failedInvokation.Function, failedInvokation.Message)
 			if err != nil {
-				fmt.Printf("Failed to invoke function %s: %v\n", failedInvokation.Function, err)
+				log.Printf("Failed to invoke function %s: %v", failedInvokation.Function, err)
 				
 				failedInvokation.InvokingNumber++
 				if failedInvokation.InvokingNumber > 5 {
-
-					fmt.Printf("Failed to invoke function %s after 5 attempts\n", failedInvokation.Function)
-					delete(failedMessages, id)
-					continue
+					log.Printf("Failed to invoke function %s after 5 attempts", failedInvokation.Function)
+                    toDelete = append(toDelete, id) // Mark for deletion
+				} else {
+					failedMessages[id] = failedInvokation
 				}
 			} else {
-				fmt.Printf("Successfully invoked function %s\n", failedInvokation.Function)
-				delete(failedMessages, id)
+				log.Printf("Successfully invoked function %s", failedInvokation.Function)
+                toDelete = append(toDelete, id) // Mark for deletion
 			}
 		}
+		
+		// Delete marked entries after iteration
+		for _, id := range toDelete {
+			delete(failedMessages, id)
+		}
+		length := len(failedMessages)
 		mu.Unlock()
-		time.Sleep(30*time.Second)
+		time.Sleep(time.Duration((length+1)*30) * time.Second)
 	}
 }
 
 func handler(w http.ResponseWriter, r *http.Request) {
-	mu.RLock()
-	defer mu.RUnlock()
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -109,18 +111,18 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	err = invokeFunction(functionToInvoke, message)
 	w.Header().Set("Content-Type", "application/json")
 	if err != nil {
+		log.Printf("Error invoking function: %v", err) // Debug log
 		http.Error(w, fmt.Sprintf("Failed to invoke function: %v", err), http.StatusInternalServerError)
 		// Store the failed message for later retry
-		mu.Lock()
-		defer mu.Unlock()
 		failedInvokation := FailedInvokation{
 			Function: functionToInvoke,
 			Message:  message,
 			InvokingNumber: 1,
 		}
-
+		mu.Lock()
 		failedMessages[uniqueID] = failedInvokation
 		uniqueID++
+		mu.Unlock()
 		return
 	} else {
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -133,10 +135,11 @@ func handler(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	gatewayURL = os.Getenv("gw-url")
-	gatewayUsername = os.Getenv("gw-username")
-	gatewayPassword = os.Getenv("gw-password")
+	gatewayUsername := os.Getenv("gw-username")
+	gatewayPassword := os.Getenv("gw-password")
 
 	uniqueID = 0
+	failedMessages = make(map[int]FailedInvokation)
 
 	creds = &auth.BasicAuthCredentials{
 		User:     gatewayUsername,
@@ -150,6 +153,6 @@ func main() {
 	if port == "" {
 		port = "8080"
 	}
-	fmt.Println("Starting server on port %s", port)
-	fmt.Println(http.ListenAndServe(":"+port, nil))
+	log.Printf("Starting server on port %s", port)
+	log.Println(http.ListenAndServe(":"+port, nil))
 }

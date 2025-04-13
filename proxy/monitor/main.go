@@ -8,9 +8,17 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"fmt"
+	"log"
+    "context"
+    "fmt"
 
 	"github.com/openfaas/faas-provider/auth"
+
+    metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+    "k8s.io/client-go/kubernetes"
+    "k8s.io/client-go/rest"
+    metricsclient "k8s.io/metrics/pkg/client/clientset/versioned"
+	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 type FunctionTuple struct { // Same as FunctionData but used only to share to the other monitoring service
@@ -25,24 +33,20 @@ type FunctionData struct {
 }
 
 var (
-	map_topicFunctions map[string][]string
-	map_functionsTagsCombined  map[string][]FunctionData
-	map_functionsTags  map[string][]FunctionTuple
-	synchronized_routers bool
+	gatewayURL string
+	creds *auth.BasicAuthCredentials
+	
+	otherMonitoringURL string
+
+	topicFunctionsMap map[string][]string
+	functionsTagsCombinedMap  map[string][]FunctionData
+	functionTagsMap  map[string][]FunctionTuple
+	synchronizedProxys bool
 	mu                 sync.RWMutex
 )
 
 func listTopicsAndFunctions() (map[string][]string, map[string][]FunctionTuple, error) {
 	// Function that fetch the topics and functions from the openfaas gateway
-	gatewayURL := os.Getenv("gw-url")
-	gatewayUsername := os.Getenv("gw-username")
-	gatewayPassword := os.Getenv("gw-password")
-
-	creds := &auth.BasicAuthCredentials{
-		User:     gatewayUsername,
-		Password: gatewayPassword,
-	}
-
 	client := &http.Client{
 		Timeout: time.Second * 10,
 	}
@@ -70,8 +74,8 @@ func listTopicsAndFunctions() (map[string][]string, map[string][]FunctionTuple, 
 		return nil, nil, err
 	}
 
-	topic_func := make(map[string][]string)
-	function_tags := make(map[string][]FunctionTuple)
+	topicFunctions := make(map[string][]string)
+	functionTags := make(map[string][]FunctionTuple)
 
 	for _, function := range functions {
 		functionName := function["name"].(string) // Name of the function, distinct for every function, used to invoke the function
@@ -82,11 +86,11 @@ func listTopicsAndFunctions() (map[string][]string, map[string][]FunctionTuple, 
 				if tagAnnotation, exists := annotations["tag"]; exists {
 					tag = tagAnnotation.(string)
 				}
-				function_tags[functionIdStr] = append(function_tags[functionIdStr], FunctionTuple{Tag: tag, FunctionName: functionName})
+				functionTags[functionIdStr] = append(functionTags[functionIdStr], FunctionTuple{Tag: tag, FunctionName: functionName})
 				if topicAnnotation, exists := annotations["topic"]; exists {
 					topics := strings.Split(topicAnnotation.(string), ",")
 					for _, topic := range topics {
-						topic_func[topic] = append(topic_func[topic], functionIdStr)
+						topicFunctions[topic] = append(topicFunctions[topic], functionIdStr)
 					}
 				}
 			}
@@ -94,7 +98,7 @@ func listTopicsAndFunctions() (map[string][]string, map[string][]FunctionTuple, 
 	}
 
 	// Remove duplicates from topicFunctions
-	for topic, functionIDs := range topic_func {
+	for topic, functionIDs := range topicFunctions {
 		uniqueFunctionIDs := make(map[string]bool)
 		for _, functionID := range functionIDs {
 			uniqueFunctionIDs[functionID] = true
@@ -103,11 +107,11 @@ func listTopicsAndFunctions() (map[string][]string, map[string][]FunctionTuple, 
 		for functionID := range uniqueFunctionIDs {
 			distinctFunctionIDs = append(distinctFunctionIDs, functionID)
 		}
-		topic_func[topic] = distinctFunctionIDs
+		topicFunctions[topic] = distinctFunctionIDs
 	}
 
 	// Remove duplicates from functionsTags
-	for functionID, tuples := range function_tags {
+	for functionID, tuples := range functionTags {
 		seenTags := make(map[string]bool)
 		uniqueTuples := []FunctionTuple{}
 
@@ -119,18 +123,17 @@ func listTopicsAndFunctions() (map[string][]string, map[string][]FunctionTuple, 
 		}
 
 		// Update the map with the unique tuples
-		function_tags[functionID] = uniqueTuples
+		functionTags[functionID] = uniqueTuples
 	}
-	return topic_func, function_tags, nil
+	return topicFunctions, functionTags, nil
 }
 
 func getOtherRouterFunctions() (map[string][]string, map[string][]FunctionTuple, error) {
-	other_monitoring_service := os.Getenv("other-monitoring-service")
 	client := &http.Client{
 		Timeout: time.Second * 10,
 	}
 
-	req, err := http.NewRequest(http.MethodGet, other_monitoring_service+"/monitoring-functions", nil)
+	req, err := http.NewRequest(http.MethodGet, otherMonitoringURL+"/monitoring-functions", nil)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -161,37 +164,28 @@ func updateTopicsAndFunctions() {
 	for {
 		newTopicFunctions, newFunctionsTags, err := listTopicsAndFunctions()
 		if err != nil {
-			fmt.Println("Error fetching this router functions: %s", err)
+			log.Printf("Error fetching this router functions: %s", err)
 		}
 		newOtherTopic, newOtherFunction, err := getOtherRouterFunctions()
 		if err != nil {
-			fmt.Println("Error fetching other router functions: %s", err)
+			log.Printf("Error fetching other router functions: %s", err)
 			mu.Lock()
-			synchronized_routers = false
+			synchronizedProxys = false
 			mu.Unlock()
 		}else {
 			mu.Lock()
-			synchronized_routers = true
+			synchronizedProxys = true
 			mu.Unlock()
 		}
 		combinedTopicFunctions := mergeTopicsMaps(newTopicFunctions, newOtherTopic)
 		combinedFunctionsTags := mergeAndTransformFunctionsMaps(newFunctionsTags, newOtherFunction)
 		mu.Lock()
-		map_topicFunctions = combinedTopicFunctions
-		map_functionsTagsCombined = combinedFunctionsTags
-		map_functionsTags = newFunctionsTags
+		topicFunctionsMap = combinedTopicFunctions
+		functionsTagsCombinedMap = combinedFunctionsTags
+		functionTagsMap = newFunctionsTags
 		mu.Unlock()
 		
-		fmt.Println("Updated topics and functions: %d topics, %d functions", len(map_topicFunctions), len(map_functionsTags))
-		/*
-		for topic, functions := range map_topicFunctions {
-			fmt.Println("Topic: %s, Functions: %v", topic, functions)
-		}
-		for functionId, tuples := range map_functionsTags {
-			fmt.Println("Function ID: %s, Tags: %v", functionId, tuples)
-		}
-		fmt.Println("Synchronized with other router: %t", synchronized_routers)
-		*/
+		log.Printf("Updated topics and functions: %d topics, %d functions", len(topicFunctionsMap), len(functionsTagsCombinedMap))
 		time.Sleep(30 * time.Second)
 	}
 }
@@ -221,15 +215,6 @@ func mergeTopicsMaps(map1, map2 map[string][]string) map[string][]string {
 
 func mergeAndTransformFunctionsMaps(map1, map2 map[string][]FunctionTuple) map[string][]FunctionData {
     result := make(map[string][]FunctionData)
-	/*
-	fmt.Println("Map 1:")
-	for functionId, tuples := range map1 {
-		fmt.Println("Function ID: %s, Tags: %v", functionId, tuples)
-	}
-	fmt.Println("Map 2:")
-	for functionId, tuples := range map2 {
-		fmt.Println("Function ID: %s, Tags: %v", functionId, tuples)
-	}*/
     // Add all entries from map1
     for functionId, tuples := range map1 {
         for _, tuple := range tuples {
@@ -265,21 +250,83 @@ func mergeAndTransformFunctionsMaps(map1, map2 map[string][]FunctionTuple) map[s
             }
         }
     }
-	for functionId, tuples := range result {
-		fmt.Println("Function ID: %s, Tags: %v", functionId, tuples)
-	}
     return result
 } 
+
+func getMetrics() (float64, float64, error) {
+    config, err := rest.InClusterConfig()
+    if err != nil {
+		return 0, 0, fmt.Errorf("Failed to create in-cluster config: %v", err)
+	}
+
+    metricsClient, err := metricsclient.NewForConfig(config)
+    if err != nil {
+		return 0, 0, fmt.Errorf("Failed to create metrics client: %v", err)
+    }
+
+    k8sClient, err := kubernetes.NewForConfig(config)
+    if err != nil {
+		return 0, 0, fmt.Errorf("Failed to create Kubernetes client: %v", err)
+    }
+
+    // Get usage
+    nodeMetricsList, err := metricsClient.MetricsV1beta1().NodeMetricses().List(context.TODO(), metav1.ListOptions{})
+    if err != nil {
+		return 0, 0, fmt.Errorf("Failed to list node metrics: %v", err)
+    }
+
+    totalCPUUsed := resource.NewQuantity(0, resource.DecimalSI)
+    totalMemUsed := resource.NewQuantity(0, resource.BinarySI)
+    for _, node := range nodeMetricsList.Items {
+        totalCPUUsed.Add(*node.Usage.Cpu())
+        totalMemUsed.Add(*node.Usage.Memory())
+    }
+
+    // Get allocatable capacity
+    nodes, err := k8sClient.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{})
+    if err != nil {
+        return 0, 0, fmt.Errorf("Failed to list nodes: %v", err)
+    }
+
+    totalCPUAlloc := resource.NewQuantity(0, resource.DecimalSI)
+    totalMemAlloc := resource.NewQuantity(0, resource.BinarySI)
+    for _, node := range nodes.Items {
+        totalCPUAlloc.Add(*node.Status.Allocatable.Cpu())
+        totalMemAlloc.Add(*node.Status.Allocatable.Memory())
+    }
+
+    cpuUsagePercent := float64(totalCPUUsed.MilliValue()) / float64(totalCPUAlloc.MilliValue()) * 100
+    memUsagePercent := float64(totalMemUsed.Value()) / float64(totalMemAlloc.Value()) * 100
+
+    fmt.Printf("Cluster CPU Usage: %sm / %sm (%.2f%%)\n",
+        totalCPUUsed.String(), totalCPUAlloc.String(), cpuUsagePercent)
+    fmt.Printf("Cluster Memory Usage: %dMi / %dMi (%.2f%%)\n",
+        totalMemUsed.ScaledValue(resource.Mega),
+        totalMemAlloc.ScaledValue(resource.Mega),
+        memUsagePercent)
+	return cpuUsagePercent, memUsagePercent, nil
+}
 
 func handler(w http.ResponseWriter, r *http.Request) {
 	mu.RLock()
 	defer mu.RUnlock()
 
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+
+	cpuUsagePercent, memUsagePercent, err := getMetrics()
+	if err != nil {
+		http.Error(w, "Error getting metrics", http.StatusInternalServerError)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"topics":    map_topicFunctions,
-		"functions": map_functionsTagsCombined,
-		"synchronized": synchronized_routers,
+		"topics":    topicFunctionsMap,
+		"functions": functionsTagsCombinedMap,
+		"synchronized": synchronizedProxys,
+		"cpu": cpuUsagePercent,
+		"memory": memUsagePercent,
 	})
 }
 
@@ -289,12 +336,23 @@ func handler2(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"topics":    map_topicFunctions,
-		"functions": map_functionsTags,
+		"topics":    topicFunctionsMap,
+		"functions": functionTagsMap,
 	})
 }
 
 func main() {
+	gatewayURL = os.Getenv("gw-url")
+	gatewayUsername := os.Getenv("gw-username")
+	gatewayPassword := os.Getenv("gw-password")
+
+	creds = &auth.BasicAuthCredentials{
+		User:     gatewayUsername,
+		Password: gatewayPassword,
+	}
+
+	otherMonitoringURL = os.Getenv("other-monitoring-service")
+
 	go updateTopicsAndFunctions()
 
 	http.HandleFunc("/topics-functions", handler)
@@ -303,6 +361,6 @@ func main() {
 	if port == "" {
 		port = "8080"
 	}
-	fmt.Println("Starting server on port %s", port)
-	fmt.Println(http.ListenAndServe(":"+port, nil))
+	log.Printf("Starting server on port %s", port)
+	log.Println(http.ListenAndServe(":"+port, nil))
 }
