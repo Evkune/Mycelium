@@ -120,10 +120,23 @@ func postInvocation(functionName string, message string, invoker int) error {
 		return err
 	}
 	defer res.Body.Close()
-	if res.StatusCode != http.StatusOK {
+	if res.StatusCode != http.StatusAccepted {
 		return fmt.Errorf("Error sending function %s: %s", functionName, res.Status)
 	}
 	return nil
+}
+
+func postInvocationWithBackoff(functionName string, message string, invoker int) {
+    backoff := 2 * time.Second
+    for i := 0; i < 5; i++ {
+        err := postInvocation(functionName, message, invoker)
+        if err == nil {
+            return
+        }
+        time.Sleep(backoff)
+        backoff *= 2 // Backoff exponentiel
+    }
+	log.Printf("Failed to invoke function %s after retries", functionName)
 }
 
 func routing(topic string, message string) error {
@@ -159,19 +172,18 @@ func routing(topic string, message string) error {
 			// Logic to handle when both routers have the function and the same tag
 			if cpuUsage > 80 ||  memoryUsage > 80 {
 				log.Printf("Cluster overloaded, invoking function: %s with tag: %s", functionToInvoke.FunctionName, functionToInvoke.Tag)
-				postInvocation(functionToInvoke.FunctionName, message, 1)
+				postInvocationWithBackoff(functionToInvoke.FunctionName, message, 1)
 			} else {
 				randomInt := int(time.Now().UnixNano() % 2)
-				postInvocation(functionToInvoke.FunctionName, message, randomInt)
+				postInvocationWithBackoff(functionToInvoke.FunctionName, message, randomInt)
 			}
 		} else if functionToInvoke.Presence == "1" {
-			postInvocation(functionToInvoke.FunctionName, message, 1)
+			postInvocationWithBackoff(functionToInvoke.FunctionName, message, 1)
 		} else {
-			postInvocation(functionToInvoke.FunctionName, message, 0)
+			postInvocationWithBackoff(functionToInvoke.FunctionName, message, 0)
 		}
 		log.Printf("Invoking function: %s with tag: %s", functionToInvoke.FunctionName, functionToInvoke.Tag)
 	}
-
 	return nil
 }
 

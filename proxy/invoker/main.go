@@ -104,33 +104,36 @@ func handler(w http.ResponseWriter, r *http.Request) {
         http.Error(w, "Failed to read request body", http.StatusBadRequest)
         return
     }
-    defer r.Body.Close() // Ensure the body is closed after reading
+    defer r.Body.Close()
 
-    message := string(body) // Convert the body to a string
+    message := string(body)
 
-	err = invokeFunction(functionToInvoke, message)
+	// Respond immediately with 202 Accepted
+	w.WriteHeader(http.StatusAccepted)
 	w.Header().Set("Content-Type", "application/json")
-	if err != nil {
-		log.Printf("Error invoking function: %v", err) // Debug log
-		http.Error(w, fmt.Sprintf("Failed to invoke function: %v", err), http.StatusInternalServerError)
-		// Store the failed message for later retry
-		failedInvokation := FailedInvokation{
-			Function: functionToInvoke,
-			Message:  message,
-			InvokingNumber: 1,
-		}
-		mu.Lock()
-		failedMessages[uniqueID] = failedInvokation
-		uniqueID++
-		mu.Unlock()
-		return
-	} else {
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"status":  "success",
-			"message": "Function invoked successfully",
-		})
-	}
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":  "accepted",
+		"message": "Function invocation accepted",
+	})
 
+    // Process the invocation asynchronously
+    go func() {
+        err := invokeFunction(functionToInvoke, message)
+        if err != nil {
+            log.Printf("Error invoking function: %v", err)
+            // Store the failed message for later retry
+            mu.Lock()
+            failedMessages[uniqueID] = FailedInvokation{
+                Function:       functionToInvoke,
+                Message:        message,
+                InvokingNumber: 1,
+            }
+            uniqueID++
+            mu.Unlock()
+        } else {
+            log.Printf("Successfully invoked function: %s", functionToInvoke)
+        }
+    }()
 }
 
 func main() {
