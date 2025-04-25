@@ -1,0 +1,21 @@
+version: 1.0
+provider:
+  name: openfaas
+  gateway: http://127.0.0.1:8080
+functions:
+  function-3:
+    lang: python3
+    build_args:
+      PYTHON_VERSION: 3.10
+    handler: ./function-3
+    image: ttl.sh/arnolec/function-3:2h
+    environment:
+      # MQTT Configuration
+      MQTT_CLIENTID: function-3
+      MQTT_BROKER: 10.0.2.15
+      MQTT_PORT: 1884
+      write_debug: true
+    annotations:
+      topic: analyzedData
+      functionId: function-3
+      tag : 1.0

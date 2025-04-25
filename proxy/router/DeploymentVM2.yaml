@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: openfaas-2
+  name: router
+  labels:
+    app: proxy-router
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: proxy-router
+  template:
+    metadata:
+      labels:
+        app: proxy-router
+    spec:
+      containers:
+      - name: proxy-router
+        image: docker.io/sky010/proxy-router:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: client-id
+          value: "routerVPS"
+        - name: broker
+          value: "tcp://10.0.2.15:1884"
+        - name: url-monitoring
+          value: "http://vps-monitoring-service.openfaas-2.svc.cluster.local:8080"
+        - name: url-invoker
+          value: "http://vps-invoker-service.openfaas-2.svc.cluster.local:8080"
+        - name: url-other-invoker
+          value: "http://invoker-service.openfaas.svc.cluster.local:8080"
