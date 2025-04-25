@@ -1,0 +1,20 @@
+version: 1.0
+provider:
+  name: openfaas
+  gateway: http://127.0.0.1:8080
+functions:
+  send-sensor-data:
+    lang: python3
+    build_args:
+      PYTHON_VERSION: 3.10
+    handler: ./send-sensor-data
+    image: ttl.sh/volodia-dell/send-sensor-data:2h
+    environment:
+      MQTT_CLIENTID: send-sensor-data
+      MQTT_URL: tcp://10.0.2.15:1883
+      write_debug: true
+
+configuration:
+  copy:
+    - ./send-sensor-data/hourly_rainfall_train.csv
+    - ./send-sensor-data/hourly_water_level_train.csv

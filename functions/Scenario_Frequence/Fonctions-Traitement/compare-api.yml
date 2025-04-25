@@ -1,0 +1,13 @@
+version: 1.0
+provider:
+  name: openfaas
+  gateway: http://127.0.0.1:8080
+functions:
+  compare-api:
+    lang: golang-middleware
+    handler: ./compare-api
+    image: myceliumir/compare-api:latest
+    annotations:
+      topic: fonction_compare_api
+
+

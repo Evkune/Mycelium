@@ -1,0 +1,14 @@
+version: 1.0
+provider:
+  name: openfaas
+  gateway: http://127.0.0.1:8080
+functions:
+  recep-moyenne:
+    lang: golang-middleware
+    handler: ./recep-moyenne
+    image: myceliumir/recep-moyenne:latest
+    annotations:
+      topic: moyennestovps
+    environment:
+      INFLUXDB_URL: http://10.133.33.52:8086
+      INFLUXDB_TOKEN: Vu1VbwdwwarVbdrlvCuYe_ptGlLmp5tBOqdbdYHsezphJJ0q41IiOmRROLR--hDh1A8hbLF4Q77W_cRACDFrWA==

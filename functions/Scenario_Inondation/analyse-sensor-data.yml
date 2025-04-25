@@ -1,0 +1,24 @@
+version: 1.0
+provider:
+  name: openfaas
+  gateway: http://127.0.0.1:8080
+functions:
+  analyse-sensor-data:
+    lang: python3-debian
+    build_args:
+      PYTHON_VERSION: 3.10
+    handler: ./analyse-sensor-data
+    image: docker.io/sky010/analyse-sensor-data:latest
+    #image: localhost:5000/analyse-sensor-data:latest
+    environment:
+      #nats_host: "nats://10.62.0.1:4222"
+      MQTT_CLIENTID: analyse-sensor-data
+      MQTT_URL: tcp://10.0.2.15:1883
+      write_debug: true
+      TF_CPP_MIN_LOG_LEVEL: '3'
+    annotations:
+        topic: "triggerAnalyse"
+
+configuration:
+  copy:
+    - ./analyse-sensor-data/model.keras

@@ -1,0 +1,16 @@
+version: 1.0
+provider:
+  name: openfaas
+  gateway: http://127.0.0.1:8080
+functions:
+  downlink-em300th:
+    lang: python3
+    handler: ./downlink-em300th
+    image: myceliumir/downlink-em300th:latest
+    annotations:
+      topic: EM300TH-changePeriode
+    environment:
+      SERVER: 10.42.0.1:8082
+      DEV_EUI: 24e124136d358401
+      API_TOKEN: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJjaGlycHN0YWNrIiwiaXNzIjoiY2hpcnBzdGFjayIsInN1YiI6ImMzZDY4Mzk2LWIyYTUtNDc2My05YmYwLTU1NWMyYTE2ZDJkMyIsInR5cCI6ImtleSJ9.fhHJOxcF0yI7kAmcVzDTKB0SFmBAEup-dFjiBv74RdQ
+

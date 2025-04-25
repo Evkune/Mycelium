@@ -1,0 +1,16 @@
+version: 1.0
+provider:
+  name: openfaas
+  gateway: http://127.0.0.1:8080
+functions:
+  send-alert:
+    lang: python3
+    handler: ./send-alert
+    image: docker.io/sky010/send-alert:latest
+    build_args:
+      PYTHON_VERSION: 3.10
+    environment:
+      #nats_host: "nats://10.62.0.1:4222"
+      write_debug: true
+    annotations:
+      topic: "triggerAlert"

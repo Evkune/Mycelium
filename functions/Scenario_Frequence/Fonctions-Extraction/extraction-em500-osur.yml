@@ -1,0 +1,15 @@
+version: 1.0
+provider:
+  name: openfaas
+  gateway: http://127.0.0.1:8080
+functions:
+  extraction-em500-osur:
+    lang: golang-middleware
+    handler: ./extraction-em500-osur
+    image: myceliumir/extraction-em500-osur:latest
+    annotations:
+      topic: application/2767ce8e-7d6d-492e-8499-c80ad966f196/device/24e124126d284216/event/up
+    environment:
+      INFLUXDB_URL: http://10.42.0.1:8086
+      INFLUXDB_TOKEN: oEjbmyJRBT_DyQ8OFew7Ah-33FUqs8PFDsRGhN08ClLMgyC_sjg2uRl2oEQrUPJpCabblv_r1N-pGxeo-PW0_A==
+

@@ -1,0 +1,14 @@
+version: 1.0
+provider:
+  name: openfaas
+  gateway: http://127.0.0.1:8080
+functions:
+  extraction-milesight:
+    lang: golang-middleware
+    handler: ./extraction-milesight
+    image: myceliumir/extraction-milesight:latest
+    annotations:
+      topic: application/cab6a5b1-4b8f-4a3f-ae9a-976461b7499d/device/24e124136d358401/event/up
+    environment:
+      INFLUXDB_URL: http://10.42.0.1:8086
+      INFLUXDB_TOKEN: Uar6D5Kg0hmAeDjTN9r6q_YN3AhRbhVgLfjuSp243o4R4xHiQ0sEJFdkORZi-1hB57QTDr2VRQjd4Lg4rW1stg==
