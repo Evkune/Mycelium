@@ -16,8 +16,6 @@ functions:
       INFLUXDB_URL: http://10.42.0.1:8086
       INFLUXDB_TOKEN: Uar6D5Kg0hmAeDjTN9r6q_YN3AhRbhVgLfjuSp243o4R4xHiQ0sEJFdkORZi-1hB57QTDr2VRQjd4Lg4rW1stg==
       MQTT_CLIENTID: moyennes-to-vps
-      MQTT_URL: tcp://10.0.2.15:1883
-      #INFLUXDB_TOKEN: NyH-jHgCvkTY9thqPYnyoYcGwyD23bkp5Btl-CTPk-JfpUj2y-Wae0Ev1F0M_Qyjp2cStFAjMVYoKAkIr5CcAQ==
-      #MQTT_URL: tcp://10.133.33.52:1883
+      MQTT_URL: tcp://192.168.122.61:1883
 
 

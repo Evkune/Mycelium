@@ -14,6 +14,5 @@ functions:
     environment:
       INFLUXDB_URL: http://10.42.0.1:8086
       INFLUXDB_TOKEN: Uar6D5Kg0hmAeDjTN9r6q_YN3AhRbhVgLfjuSp243o4R4xHiQ0sEJFdkORZi-1hB57QTDr2VRQjd4Lg4rW1stg==
-      #INFLUXDB_TOKEN: oEjbmyJRBT_DyQ8OFew7Ah-33FUqs8PFDsRGhN08ClLMgyC_sjg2uRl2oEQrUPJpCabblv_r1N-pGxeo-PW0_A==
       MQTT_CLIENTID: extraction-em500-osur
-      MQTT_URL: tcp://10.0.2.15:1883
+      MQTT_URL: tcp://192.168.122.61:1883

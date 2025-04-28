@@ -21,21 +21,22 @@ INFLUXDB_BUCKET: "<Nom_du_Bucket>"
 
 # Utiliser le Proxy :
 
-## 0. Adaptation des fonctions pour utiliser le proxy
+## 0. Adaptation des fonctions pour utiliser le proxy sur la VM
 
 - Si le scénario utilise une base de données plusieurs fois, s'assurer que toutes les fonctions qui ont besoin de la base de données sont déployées dans le même environnement (Uniquement cluster ou VPS)
 
-- Aller dans le fichier yaml de configuration de votre fonction et y rajouter à la fin si non présents les parties *environment*, et *annotations*:
-```yaml
-environment:
-  MQTT_CLIENTID: <NOM_FONCTION>
-  MQTT_URL: tcp://10.0.2.15:1883
-```
+- Aller dans le fichier yaml de configuration de votre fonction et y rajouter à la fin si non présents la partie *annotations*:
 ```yaml
 annotations:
   topic: <TOPIC>
   functionId: <FUNCTION_ID>
   tag: 1.0
+```
+Il faut également ajouter cette partie *environment* dans le yaml si la fonction publie sur MQTT:
+```yaml
+environment:
+  MQTT_CLIENTID: <NOM_FONCTION>
+  MQTT_URL: tcp://10.0.2.15:1883
 ```
 
 ## 1. Déploiement de fonctions
@@ -60,12 +61,12 @@ OPENFAAS_PORT=8082 MQTT_PORT=1884 just faas-pub
 Exécuter les commandes suivantes dans la VM dans le dossier mycelium/proxy :
 
 ```bash
-kubectl apply -f monitor/Deployment.yaml
-kubectl apply -f monitor/DeploymentVPS.yaml
-kubectl apply -f router/Deployment.yaml
-kubectl apply -f router/DeploymentVPS.yaml
-kubectl apply -f invoker/Deployment.yaml
-kubectl apply -f invoker/DeploymentVPS.yaml
+kubectl apply -f monitor/DeploymentVM1.yaml
+kubectl apply -f monitor/DeploymentVM2.yaml
+kubectl apply -f router/DeploymentVM1.yaml
+kubectl apply -f router/DeploymentVM2.yaml
+kubectl apply -f invoker/DeploymentVM1.yaml
+kubectl apply -f invoker/DeploymentVM2.yaml
 ```
 
 ## 3. Envoyer un message sur un topic
@@ -76,4 +77,20 @@ kubectl apply -f invoker/DeploymentVPS.yaml
 MQTT_PORT=1883 just mqtt-pub TOPIC MESSAGE
 ```
 
+## URL des différents brokers MQTT et des Bases de données
 
+- Broker MQTT Cluster : tcp://192.168.122.61:1883
+- Broker MQTT VPS : tcp://10.133.33.52:1883
+- Broker MQTT VM : tcp://10.0.2.15:1883 pour le premier  tcp://10.0.2.15:1883 pour le deuxième
+
+- InfluxDB Cluster /  VM : tcp://10.42.0.1:8086
+- InfluxDB VPS : tcp://10.133.33.52:8086
+
+## Build et Push des fonctions openfaas
+
+Pour chaque fonction effectuer :
+
+```bash
+faas-cli build -f <FONCTION>.yml
+faas-cli push -f <FONCTION>.yml
+```

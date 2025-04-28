@@ -1,0 +1,17 @@
+version: 1.0
+provider:
+  name: openfaas
+  gateway: http://127.0.0.1:8080
+functions:
+  chaleur:
+    lang: golang-middleware
+    handler: ./chaleur
+    image: ttl.sh/arnolec/chaleur:2h
+    annotations:
+      topic: fonction_chaleur
+      functionId: chaleur-fn
+      tag: 1.0
+    environment:
+      MORE_DATA: false
+      MQTT_CLIENTID: chaleur
+      MQTT_URL: tcp://192.168.122.61:1883

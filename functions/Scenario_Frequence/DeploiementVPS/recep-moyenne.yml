@@ -13,5 +13,4 @@ functions:
       tag: 1.0
     environment:
       INFLUXDB_URL: http://10.133.33.52:8086
-      #INFLUXDB_TOKEN: Vu1VbwdwwarVbdrlvCuYe_ptGlLmp5tBOqdbdYHsezphJJ0q41IiOmRROLR--hDh1A8hbLF4Q77W_cRACDFrWA==
-      INFLUXDB_TOKEN: Uar6D5Kg0hmAeDjTN9r6q_YN3AhRbhVgLfjuSp243o4R4xHiQ0sEJFdkORZi-1hB57QTDr2VRQjd4Lg4rW1stg==
+      INFLUXDB_TOKEN: Vu1VbwdwwarVbdrlvCuYe_ptGlLmp5tBOqdbdYHsezphJJ0q41IiOmRROLR--hDh1A8hbLF4Q77W_cRACDFrWA==
