@@ -8,7 +8,7 @@ functions:
     build_args:
       PYTHON_VERSION: 3.10
     handler: ./process-analysed-data
-    image: docker.io/sky010/process-analysed-data:latest
+    image: ttl.sh/thibault/process-analysed-data:2h
     environment:
       #nats_host: "nats://10.62.0.1:4222"
       # InfluxDB Configuration
@@ -22,3 +22,5 @@ functions:
       write_debug: true
     annotations:
       topic: "analysedData"
+      functionId: process-analysed-data-fn
+      tag: 1.0

@@ -6,11 +6,15 @@ functions:
   send-alert:
     lang: python3
     handler: ./send-alert
-    image: docker.io/sky010/send-alert:latest
+    image: ttl.sh/thibault/send-alert:2h
     build_args:
       PYTHON_VERSION: 3.10
     environment:
+      MQTT_CLIENTID: send-alert
+      MQTT_URL: tcp://10.0.2.15:1883
       #nats_host: "nats://10.62.0.1:4222"
       write_debug: true
     annotations:
       topic: "triggerAlert"
+      functionId: send-alert-fn
+      tag: 1.0

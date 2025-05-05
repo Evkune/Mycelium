@@ -8,7 +8,7 @@ functions:
     build_args:
       PYTHON_VERSION: 3.10
     handler: ./send-sensor-data
-    image: ttl.sh/volodia-dell/send-sensor-data:2h
+    image: ttl.sh/thibault/send-sensor-data:2h
     environment:
       MQTT_CLIENTID: send-sensor-data
       MQTT_URL: tcp://10.0.2.15:1883

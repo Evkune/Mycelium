@@ -1,109 +1,106 @@
 import asyncio
 import json
 import os
+import aiomqtt as mqtt
 from datetime import datetime, timedelta
 
-import influxdb_client
-import nats
-from influxdb_client import Point
+from influxdb_client import InfluxDBClient, Point
 from influxdb_client.client.write_api import SYNCHRONOUS
 
-client = None
-
+# Global InfluxDB client instance
+db_client = None
 
 def handle(req):
     """
-    Fonction d'arrivée pour les programmes qui tournent avec nats
+    Triggered by OpenFaaS when a message arrives on MQTT topic 'analysedData'.
 
-    :param req: un payload avec une date et un niveau d'eau
-    :return: rien
+    :param req: JSON payload as bytes or str
+    :return: None
     """
-    asyncio.run(process(req))
+    # Normalize payload to str
+    payload = req.decode('utf-8') if isinstance(req, (bytes, bytearray)) else req
+    # Run async pipeline
+    asyncio.run(process(payload))
 
-
-async def export_to_database(measurement, json_input, date):
+async def process(payload):
     """
-    Permet d'enregistrer notre payload sur InfluxDB
+    Core logic: parse payload, store to DB, evaluate alerts, publish via MQTT.
 
-    :param measurement: le nom de la base de données dans laquelle on veut enregistrer les données
-    :param json_input: le payload sous format json
-    :param date: la date associée au paylaod
-    :return: rien
+    :param payload: JSON payload containing 'date' and 'waterLevel'
+    :return: None
     """
-    write_api = connect_to_database().write_api(write_options=SYNCHRONOUS)
+    # Parse input JSON
+    data = json.loads(payload)
+    # Parse ISO date string to datetime
+    timestamp = datetime.fromisoformat(data['date'])
+    bucket = os.environ['INFLUXDB_BUCKET']
 
-    point = (Point(measurement)
-             .field("waterLevel", json_input['waterLevel'])
-             .time(date, write_precision="s"))
+    print(f"Processing analysed data for {timestamp}")
 
-    write_api.write(bucket=os.environ.get('INFLUXDB_BUCKET'), org=os.environ.get('INFLUXDB_ORG'), record=point)
+    # 1. Store to InfluxDB in 'predictions' measurement
+    export_to_database(bucket, 'predictions', data, timestamp)
+
+    # 2. Evaluate alert condition
+    alert_payload = is_there_alert(data)
+
+    # 3. Publish alert via MQTT if needed
+    if alert_payload:
+        mqtt_url = os.environ.get('MQTT_URL', 'tcp://localhost:1883').replace('tcp://', '')
+        broker, port = mqtt_url.split(':')
+        async with mqtt.Client(broker, int(port)) as client:
+            await client.publish('triggerAlert', json.dumps(alert_payload).encode('utf-8'))
+
+    print("Done processing analysed data.")
 
 
-def is_there_alert(json_input):
+def export_to_database(bucket: str, measurement: str, data: dict, timestamp: datetime):
     """
-    Regarde si le payload reçu doit déclencher une alerte
+    Write a prediction point to InfluxDB.
 
-    :param json_input: le payload sous format json
-    :return: un json signalant une alerte
+    :param bucket: InfluxDB bucket name
+    :param measurement: Measurement name (e.g., 'predictions')
+    :param data: Dict containing 'waterLevel' and 'date'
+    :param timestamp: datetime object
+    :return: None
     """
-    print(f"Water level is {json_input['waterLevel']}m")
-    dictionnaire = {}
-    if json_input['waterLevel'] >= 1.5:
-        print(f"Water level is above threshold, triggering alert")
-        dictionnaire.update({'alertType': 'floodPrediction'})
-        dictionnaire.update({'date': json_input['date']})
-    json_output = json.dumps(dictionnaire)
-    return json_output
+    write_api = connect_db().write_api(write_options=SYNCHRONOUS)
+    point = (
+        Point(measurement)
+        .field('waterLevel', data['waterLevel'])
+        .time(timestamp, write_precision='s')
+    )
+    write_api.write(bucket=bucket, record=point)
+    write_api.close()
 
 
-def connect_to_database():
+def is_there_alert(data: dict) -> dict:
     """
-    Lance la connexion avec la base de données
+    Determine if water level exceeds prediction threshold (1.5m).
 
-    :return: l'objet qui permet de communiquer avec la base de données
+    :param data: Dict containing 'waterLevel' and 'date'
+    :return: Alert dict or empty dict
     """
-    global client
+    level = data.get('waterLevel')
+    print(f"Predicted water level is {level} m")
+    if level is not None and level >= 1.5:
+        print("Threshold exceeded, triggering floodPrediction alert")
+        return {
+            'alertType': 'floodPrediction',
+            'date': data['date']
+        }
+    return {}
 
-    if client is None:
-        client = influxdb_client.InfluxDBClient(
-            os.environ.get('INFLUXDB_URL'),
-            token=os.environ.get('INFLUXDB_TOKEN'),
-            org=os.environ.get('INFLUXDB_ORG')
+
+def connect_db() -> InfluxDBClient:
+    """
+    Lazy-initialize and return the global InfluxDBClient.
+    """
+    global db_client
+    if db_client is None:
+        db_client = InfluxDBClient(
+            url=os.environ['INFLUXDB_URL'],
+            token=os.environ['INFLUXDB_TOKEN'],
+            org=os.environ['INFLUXDB_ORG']
         )
+    return db_client
 
-    return client
-
-
-def close_database_connection():
-    """
-    Ferme la connexion avec la base de données
-
-    :return: rien
-    """
-    global client
-    if client is not None:
-        client.close()
-        client = None
-
-
-async def process(req):
-    """
-    Fonction principale qui gère la connexion avec nats et appelle les fonctions pour enregistrer les données
-
-    :param req: un payload avec une date et un niveau d'eau
-    :return: envoie une alerte sur le topic triggerAlert
-    """
-    nc = await nats.connect(servers=os.environ.get('nats_host'))
-    json_input = json.loads(req)
-
-    date = datetime.fromisoformat(json_input['date'])
-    print(f"Received prediction for {date}")
-
-    await export_to_database("predictions", json_input, date)
-
-    alert = is_there_alert(json_input)
-    if alert != '{}':
-        await nc.publish('triggerAlert', f"{alert}".encode())
-    await nc.flush()
-    await nc.close()
-    close_database_connection()

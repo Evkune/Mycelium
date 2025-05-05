@@ -1,5 +1,5 @@
 FROM ghcr.io/openfaas/classic-watchdog:0.3.2 as watchdog
-FROM python:3
+FROM python:3.10-slim-bullseye
 
 # Allows you to add additional packages via build-arg
 ARG ADDITIONAL_PACKAGE

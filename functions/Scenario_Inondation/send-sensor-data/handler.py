@@ -1,172 +1,108 @@
 import asyncio
-import csv
-import datetime
-import json
 import os
+import csv
+import json
 import aiomqtt as mqtt
-import nats
 
 from datetime import datetime
 
 
-def handle(req):
+def handle(req=None):
     """
-    Fonction d'arrivée pour les programmes qui tournent avec nats
+    Entry point for OpenFaaS or manual invocation. 
+    - If no req provided or empty: uses default CSV row 10.
+    - If req is integer string: uses that row index.
+    - If req contains 'test-alert': publishes custom JSON with waterlevel=1.9 (will trigger the alert function).
 
-    :param req: "mqtt" ou "test-alert" ou un numéro de ligne pour choisir ce que l'on veut faire avec la fonction process
-    :return: rien
+    :param req: request from OpenFaaS or CLI
+    :return: None
     """
+    # Delegate to async processing
     asyncio.run(process(req))
 
-
-async def process(req):
+async def process(req=None):
     """
-    Fonction générale qui gère la connexion avec nats et mqtt
+    Orchestrates MQTT publishing of sensor data.
 
-    :param req: "mqtt" ou "test-alert" ou un numéro de ligne
-    :return: un payload envoyé sur le topic rawData
+    - If req is "test-alert", publishes a custom alert payload.
+    - If req is an integer string, fetches data from CSV files based on that index.
+    - If req is None or empty, defaults to row index 10.
+
+    :param req: request from OpenFaaS or CLI
+    :return: None
     """
-    if req == "mqtt":
-        # Connexion MQTT
-        async with mqtt.Client("10.0.2.15", 1883) as client:
-            rawData = accessDatabase(10)
-            # Publier les données sur le topic rawData
+    # Get MQTT broker URL and port from environment variable
+    mqtt_url = os.environ.get('MQTT_URL', 'tcp://10.0.2.15:1883').replace('tcp://', '')
+    broker, port = mqtt_url.split(':')
+
+    # Custom alert payload
+    if isinstance(req, str) and req == "test-alert":
+        raw = {"date": "2023-01-01T14:00:00.000Z", "rainfall": 0.8, 'waterLevel': 1.9}
+        rawData = json.dumps(raw)
+        print(f"[custom alert] payload: {rawData}")
+
+        # Publish to MQTT
+        async with mqtt.Client(broker, int(port)) as client:
             await client.publish('rawData', rawData.encode('utf-8'))
-            # S'abonner au topic pour écouter les messages
-            #await client.subscribe("application/+/device/+/event/+")
-            #async for message in client.messages:
-            #    await on_message(message)
-    else:
-        async with mqtt.Client("10.0.2.15", 1883) as client:
-            print(f"Sending data #{req}")
-            #rawData = accessDatabase(int(req))  # Fonction qui accède à la DB
-            rawData = accessDatabase(15)
-            # Publier les données sur le topic rawData
-            await client.publish('rawData', rawData.encode('utf-8'))
+            print("Published to MQTT topic 'rawData'.")
+        return
+    
+    # Analyse test: publish 11 consecutive records to trigger analysis
+    if isinstance(req, str) and req == "test-analyse":
+        # default start index if none provided
+        start = 10
+        print(f"[test-analyse] starting at index={start}")
+        
+        async with mqtt.Client(broker, int(port)) as client:
+            for i in range(start, start + 11):
+                rawData = accessDatabase(i)
+                print(f"[analyse] row={i} payload: {rawData}")
+                await client.publish('rawData', rawData.encode('utf-8'))
+                print(f"Published row {i} to MQTT topic 'rawData'.")
+        return
+    
+    # Else, decide row index for CSV lookup
+    try:
+        index = int(req)
+    except (TypeError, ValueError):
+        index = 10  # default row if no valid index provided (in req)
 
+    # Fetch from CSVs
+    rawData = accessDatabase(index)
+    print(f"[csv lookup] row={index} payload: {rawData}")
+    # Publish to MQTT
+    async with mqtt.Client(broker, int(port)) as client:
+        await client.publish('rawData', rawData.encode('utf-8'))
+        print("Published to MQTT topic 'rawData'.")
 
-def accessDatabase(req):
+def accessDatabase(req_index):
     """
-    Permet de récupérer des valeurs de nos deux csv
+    Synchronous CSV lookup combining rainfall and water level data.
     ATTENTION : Les données utilisées devraient être celles de l'OSUR pour l'utilisation du modèle,
     étant donné qu'elles sont inexploitables, nous utilisons de nouveaux les données de météoFrance et de VigiCrues.
 
-    :param req: la ligne que l'on souhaite récupérer
-    :return: un json avec les données associées
+    :param req_index: index of the row to fetch from CSV files
+    :return: JSON string with rainfall and water level data
     """
-    fileRainfall = open('./function/meteofrance.csv', 'r')
-    fileWaterLevel = open('./function/VigiCrues2023-2024.csv', 'r')
-    reader = csv.reader(fileRainfall)
-    rowNb = 0
-    dictionary = {}
-    for row in reader:
-        if rowNb == req:
-            data = row[2].replace(",", ".")
-            dictionary.update({'rainfall': float(data)})
-            break
-        else:
-            rowNb += 1
-    fileRainfall.close()
-    reader = csv.reader(fileWaterLevel)
-    rowNb = 0
-    for row in reader:
-        if rowNb == req:
-            dictionary.update({'date': row[0]})
-            dictionary.update({'waterLevel': float(row[1])})
-            break
-        else:
-            rowNb += 1
-    fileWaterLevel.close()
-    json_object = json.dumps(dictionary)
-    return json_object
+    data = {}
+    # Meteo France CSV
+    with open('./function/meteofrance.csv', 'r', newline='') as f:
+        reader = csv.reader(f, delimiter=',', quotechar='"')
+        for i, row in enumerate(reader):
+            if i == req_index:
+                if len(row) >= 3:
+                    data['rainfall'] = float(row[2].replace(',', '.'))
+                break
 
+    # Vigi Crues CSV
+    with open('./function/VigiCrues2023-2024.csv', 'r', newline='') as f:
+        reader = csv.reader(f, delimiter=',', quotechar='"')
+        for i, row in enumerate(reader):
+            if i == req_index:
+                if len(row) >= 2:
+                    data['date'] = row[0]
+                    data['waterLevel'] = float(row[1].replace(',', '.'))
+                break
 
-async def on_message(msg):
-    """
-    Permet de décider quoi faire lors de la réception d'un message
+    return json.dumps(data)
 
-    :param msg: le message reçu de mqtt
-    :return: rien
-    """
-    if str(msg.topic).endswith("/event/up"):
-        print("C'est un gentil PAYLOAD")
-        print(msg.topic)
-        byte_string = msg.payload
-        json_string = byte_string.decode('utf-8')
-        json_data = json.loads(json_string)
-        print(json_data)
-        await processMqtt(json_data)
-    else:
-        print("C'est un méchant PAYLOAD")
-        print(str(msg.topic) + " -> " + str(msg.payload))
-    print(
-        "************************************************************************************************************************************************************************")
-
-
-async def processMqtt(json_file):
-    """
-    Envoie les données pertinentes des capteurs de l'OSUR avec topic NATS
-
-    :param json_file: le message de mqtt sous format json
-    :return: un payload envoyé sur le topic rawData
-    """
-    # nc = await nats.connect(servers=os.environ.get('nats_host'))
-    dictionary = {}
-
-    if "pluviometre" in json_file["deviceInfo"]["applicationName"].lower():
-        date = json_file["time"]
-        parsed_date = datetime.strptime(date, "%Y-%m-%dT%H:%M:%S.%f%z")
-        formatted_date = parsed_date.strftime('%Y-%m-%d %H:%M:%S')
-
-        dictionary.update({'date': formatted_date})
-        dictionary.update({'rainfall': float(json_file["object"]["rain_current"]["value"])})
-
-        print("The device called " + json_file["deviceInfo"]["deviceName"])
-        print("tells us that the current rain fall is " + str(json_file["object"]["rain_current"]["value"]) +
-              json_file["object"]["rain_current"]["unit"])
-        print("and the total amount of rain is " + str(json_file["object"]["rain_total"]["value"]) +
-              json_file["object"]["rain_total"]["unit"] + ".")
-
-    elif "RAK_CTD" in json_file["deviceInfo"]["applicationName"]:
-        date = json_file["time"]
-        parsed_date = datetime.strptime(date, "%Y-%m-%dT%H:%M:%S.%f%z")
-        formatted_date = parsed_date.strftime('%Y-%m-%d %H:%M:%S')
-
-        dictionary.update({'date': formatted_date})
-        dictionary.update({'waterlevel': float(json_file["object"]["waterlevel"]["value"]) / 1000})
-
-        print("The device called " + json_file["deviceInfo"]["deviceName"])
-        print("tells us that the current water level is " + str(json_file["object"]["waterlevel"]["value"]) +
-              json_file["object"]["waterlevel"]["unit"] + ".")
-    else:
-        return
-
-    print(dictionary)
-    print(json.dumps(dictionary))
-
-    json_output = json.dumps(dictionary)
-    # await nc.publish('rawData', f"{json_output}".encode())
-    # await nc.flush()
-    # await nc.close()
-
-
-def alexandre(start):
-    """
-    Fonction de test qui a pour but de donner 10 heures de données consécutives
-
-    :param start: la ligne de départ
-    :return: rien
-    """
-    liste = []
-    for i in range(start, start + 11):
-        entree = json.loads(accessDatabase(i))
-        liste.append(entree)
-    dictionnaire = {}
-    dictionnaire.update({'data': liste})
-    json_object = json.dumps(dictionnaire)
-    print(json_object)
-
-
-if __name__ == "__main__":
-    instruction = input("What is your request ? ")
-    asyncio.run(process(instruction))

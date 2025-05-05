@@ -30,5 +30,3 @@ def handle(req):
     webhook = DiscordWebhook(url=url, content=message)
     webhook.execute()
 
-# if __name__ == "__main__":
-#     handle('''{"alertType": "floodUnderway", "date": "2018-11-24 03:00:00"}''')

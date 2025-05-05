@@ -4,165 +4,135 @@ import json
 import os
 from datetime import datetime, timedelta
 
-import nats
-import numpy
-import pandas
-from keras.api.models import load_model
+import numpy as np
+import pandas as pd
+import aiomqtt as mqtt
+import tensorflow as tf
 
+# Normalization parameters
 rainfall_min = 0.0
 rainfall_scale = 16.0
-
 waterlevel_min = 0.24
 waterlevel_scale = 1.84
 
+def handle(req):
+    """
+    Entry-point for OpenFaaS via MQTT hook on 'triggerAnalyse'
+    
+    :param req: 11-payloads list each with a date, waterLevel and rainfall
+    :return: None
+    """
+    print("hello world")
+    payload = req.decode('utf-8') if isinstance(req, (bytes, bytearray)) else req
+    asyncio.run(process(payload))
+
+async def process(req):
+    """
+    Core logic: load LSTM model, preprocess data, predict water level, publish results.
+
+    :param req: 11-payloads list each with a date, waterLevel and rainfall
+    :return: None
+    """
+    # 1. Load model & preprocess
+    model = load_trained_LSTM_model()
+    sensor_df = get_sensor_data_sequence(req)
+    processed = data_preprocessing(sensor_df)
+
+    print("Running prediction on processed data")
+    prediction = model.predict(processed)
+    result = data_postprocessing(prediction)
+    pred_date = get_prediction_date(req).isoformat()
+
+    print(f"Predicted water level {result:.2f} at {pred_date}")
+    out = {'date': pred_date, 'waterLevel': round(result, 2)}
+    msg = json.dumps(out).encode('utf-8')
+
+    # 2. Publish via MQTT
+    mqtt_url = os.environ.get('MQTT_URL', 'tcp://10.0.2.15:1883').replace('tcp://', '')
+    host, port = mqtt_url.split(':')
+    async with mqtt.Client(host, int(port)) as client:
+        await client.publish('analysedData', msg)
+    print("Published prediction to 'analysedData'.")
 
 def get_sensor_data_sequence(req):
     """
-    Lecture des données et stockage dans un DataFrame
+    Build a DataFrame from 11 JSON payloads:
+    - create a DataFrame with columns 'Rainfall (mm)' and 'Level (m)'
 
-    :param req: une liste de 11 payloads avec chacun une date, un niveau d'eau de pluie cumulé
-    (rainfall par météoFrance) et le niveau d'eau (waterLevel par VigiCrues)
-    :return: return un DataFrame
+    :param req: 11-payloads list each with a date, waterLevel and rainfall
+    :return: DataFrame with normalized rainfall and waterLevel
     """
-    data_array = json.loads(req).get("data")
-
+    data_array = json.loads(req).get("data", [])
     rainfall_array = []
     water_level_array = []
-
-    # Charger et normaliser les données
     for data in data_array:
-        rainfall_array.append((data.get("rainfall") - rainfall_min) / rainfall_scale)
-        water_level_array.append((data.get("waterLevel") - waterlevel_min) / waterlevel_scale)
-
-    realtime_historical_data = {'Rainfall (mm)': rainfall_array,
-                                'Level (m)': water_level_array}
-
-    realtime_historical_data_df = pandas.DataFrame(realtime_historical_data, columns=['Rainfall (mm)', 'Level (m)'])
-
-    return realtime_historical_data_df
+        rainfall_array.append((data["rainfall"] - rainfall_min) / rainfall_scale)
+        water_level_array.append((data["waterLevel"] - waterlevel_min) / waterlevel_scale)
+    return pd.DataFrame({
+        'Rainfall (mm)': rainfall_array,
+        'Level (m)': water_level_array
+    })
 
 
-def data_preprocessing(sensor_data_sequence, num_past_hours=10):
+def data_preprocessing(sensor_df, num_past_hours=10):
     """
-    Fonction reprise du papier de recherche
-    Prétraitement des données (pour le modèle LSTM)
-
-    :param sensor_data_sequence: un dataframe
-    :param num_past_hours: la taille de l'intervalle de temps
-    :return: les données prétraitées
+    Transform DataFrame into LSTM-ready 3D array
+    - Reshape the data to be 3D (samples, time steps, features)
+    - Create a new DataFrame with columns 'var1(t-10)', 'var2(t-10)', ..., 'var1(t-1)', 'var2(t-1)'
+    - Shift the data to create a time series
+    - Remove NaN values
+    - Reshape the data to be 3D (samples, time steps, features)
+    
+    :param sensor_data_sequence: DataFrame with columns 'Rainfall (mm)' and 'Level (m)'
+    :param num_past_hours: size of the time interval (default is 10)
+    :return: 3D array with shape (samples, time steps, features)
     """
-    num_features = sensor_data_sequence.shape[1]
-
-    sensor_data_sequence_df = pandas.DataFrame(sensor_data_sequence)
-    columns, names = list(), list()
-
+    num_features = sensor_df.shape[1]
+    columns, names = [], []
     # Préparation des données historiques (t-n à t-1)
     for n in range(num_past_hours, 0, -1):
-        columns.append(sensor_data_sequence_df.shift(n))
-        names += [('var%d(t-%d)' % (m + 1, n)) for m in range(num_features)]
+        columns.append(sensor_df.shift(n))
+        names += [f'var{m+1}(t-{n})' for m in range(num_features)]
 
     # combine all columns and remove NaN values
-    combined_data = pandas.concat(columns, axis=1)
-    combined_data.columns = names
-    combined_data.dropna(inplace=True)
+    combined = pd.concat(columns, axis=1)
+    combined.columns = names
+    combined.dropna(inplace=True)
 
     # Redimensionnement
-    combined_data = numpy.array(combined_data).reshape((combined_data.shape[0], 1, combined_data.shape[1]))
+    arr = combined.to_numpy().reshape((combined.shape[0], 1, combined.shape[1]))
 
-    return combined_data
+    return arr
 
 
-def data_postprocessing(data):
+def data_postprocessing(predicted):
     """
-    Post-traitement des données (déréduction des données)
+    Denormalize single LSTM prediction
 
-    :param data: les données prédites
-    :return: les données déréduites
+    :param data: LSTM prediction
+    :return: denormalized water level
     """
-    return (data[0][0] * waterlevel_scale) + waterlevel_min
+    return (predicted[0][0] * waterlevel_scale) + waterlevel_min
 
 
 def load_trained_LSTM_model():
     """
-    Charger le modèle LSTM entraîné et affiche le résumé du modèle
+    Load Keras .keras model
 
-    :return: le modèle
+    :return: Keras model
     """
-    model = load_model('./function/model.keras')
-    # model = load_model('./model.keras')
+    model = tf.keras.models.load_model('./function/model.keras')
     return model
-
-
-def handle(req):
-    """
-    Fonction d'arrivée pour les programmes qui tournent avec nats
-
-    :param req: une liste de 11 payloads avec chacun une date, un niveau d'eau de pluie cumulé
-    (rainfall par météoFrance) et le niveau d'eau (waterLevel rainFall)
-    :return: rien
-    """
-    asyncio.run(process(req))
 
 
 def get_prediction_date(req):
     """
-    Permet de récupérer la date associée au payload reçu du topic triggerAnalyse
+    Determine prediction timestamp: last input date + 10h
 
-    :param req: une liste de 11 payloads avec chacun une date, un niveau d'eau de pluie (rainfall) et le niveau d'eau (waterlevel)
-    :return: la date associée
+    :param req: 11-payloads list each with a date, waterLevel and rainfall
+    :return: datetime object representing the prediction date
     """
-    data_array = json.loads(req).get("data")
-
-    date_array = []
-
-    for data in data_array:
-        date_array.append(datetime.fromisoformat(data.get("date")))
-
-    date_array.sort(reverse=True)
-    prediction_date = date_array[0] + timedelta(hours=10)
-
-    return prediction_date
-
-
-async def process(req):
-    """
-    Fonction principale qui gère la connexion avec nats et appelle les fonctions pour analyser les données
-
-    :param req: une liste de 11 payloads avec chacun une date, un niveau d'eau de pluie (rainfall) et le niveau d'eau (waterlevel)
-    :return: envoie un payload de données prédites sur le topic analysedData
-    """
-    # Connection au serveur NATS
-    nc = await nats.connect(servers=os.environ.get('nats_host'))
-
-    # Chargement du modèle
-    model = load_trained_LSTM_model()
-
-    # Lecture des données et stockage dans un DataFrame
-    sensor_data_sequence = get_sensor_data_sequence(req)
-
-    # Prétraitement des données (pour le modèle LSTM)
-    processed_data = data_preprocessing(sensor_data_sequence)
-
-    print("Receiving data for prediction")
-
-    # Prédiction
-    prediction = model.predict(processed_data)
-
-    # Post-traitement des données
-    predicted_waterlevel = data_postprocessing(prediction)
-
-    print(f"Predicting water level of {predicted_waterlevel} for {get_prediction_date(req).isoformat()}")
-
-    analyzed_data = {
-        'date': get_prediction_date(req).isoformat(),
-        'waterLevel': round(predicted_waterlevel, 2)
-    }
-
-    json_object = json.dumps(analyzed_data)
-
-    # print(json_object)
-
-    await nc.publish('analysedData', f"{json_object}".encode())
-    await nc.flush()
-    await nc.close()
+    dates = [datetime.fromisoformat(d.get("date")) for d in json.loads(req).get("data", [])]
+    newest = max(dates)
+    return newest + timedelta(hours=10)
 

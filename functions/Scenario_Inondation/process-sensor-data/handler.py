@@ -1,167 +1,168 @@
 import asyncio
 import json
 import os
-from datetime import datetime, timedelta
-from re import split
-
-import influxdb_client
 import aiomqtt as mqtt
-from influxdb_client import Point
+from datetime import datetime, timedelta
+
+from influxdb_client import InfluxDBClient, Point
 from influxdb_client.client.write_api import SYNCHRONOUS
 
-client = None
-date_format = '%Y-%m-%dT%H:%M:%S.000Z'
+# Global InfluxDB client instance
+db_client = None
+# Date format for incoming data
+DATE_FORMAT = '%Y-%m-%dT%H:%M:%S.000Z'
 
 def handle(req):
     """
-    Fonction d'arrivée pour les programmes qui tournent avec nats
+    Entry point triggered by OpenFaaS when a message arrives on MQTT topic 'rawData'.
 
-    :param req: un payload avec une date, un niveau d'eau de pluie cumulé
-    (rainfall par météoFrance) et le niveau d'eau (waterLevel rainFall)
-    :return: rien
+    :param req: JSON payload as bytes or str
+    :return: None
     """
-    asyncio.run(process(req))
+    
+    # Ensure req is a string
+    payload = req.decode('utf-8') if isinstance(req, (bytes, bytearray)) else req
+    # Delegate to async processing
+    asyncio.run(process(payload))
 
-
-def is_there_alert(json_input):
+async def process(payload):
     """
-    Regarde si le payload reçu doit déclencher une alerte
+    Core logic: parse payload, store to DB, evaluate alerts/analysis, publish results.
 
-    :param json_input: le payload sous format json
-    :return: un json signalant une alerte
+    :param payload: JSON payload containing sensor data (rainfall, water level, date)
+    :return: None
     """
-    print(f"Water level is {json_input['waterLevel']}m")
-    dicti = {}
-    if json_input['waterLevel'] > 1.8:
-        print(f"Water level is above threshold, triggering alert")
-        dicti.update({'alertType': 'floodUnderway'})
-        dicti.update({'date': json_input['date']})
-    json_output = json.dumps(dicti)
-    return json_output
 
+    # Parse input JSON
+    data = json.loads(payload)
+    timestamp = datetime.strptime(data['date'], DATE_FORMAT)
+    bucket = os.environ['INFLUXDB_BUCKET']
 
-def is_there_analyse(query):
+    print(f"Processing data for {timestamp}")
+    # 1. Store in InfluxDB
+    export_to_database(bucket, 'measures', data, timestamp)
+
+    # 2. Check for alerts
+    alert = is_there_alert(data)
+
+    # 3. Query recent data for analysis
+    results = query_last_n_hours(bucket, 'measures', timestamp)
+    analysis = is_there_analysis(results)
+
+    # 4. Publish messages on MQTT
+    mqtt_url = os.environ.get('MQTT_URL', 'tcp://10.0.2.15:1883').replace('tcp://', '')
+    broker, port = mqtt_url.split(':')
+    async with mqtt.Client(broker, int(port)) as client:
+        if alert:
+            await client.publish('triggerAlert', json.dumps(alert).encode('utf-8'))
+        if analysis:
+            await client.publish('triggerAnalyse', json.dumps(analysis).encode('utf-8'))
+    # Do not close DB here; rely on process exit :
+        # In OpenFaaS, your function container stays alive between invocations (until scaled down or redeployed).
+        # This allows us to keep the DB connection alive and reuse it for better performance.
+        # Only when the container is terminated will everything (including the DB client) be garbage-collected.
+    # close_database_connection()
+    print("Done processing data.")
+
+def connect_db():
     """
-    Regarde si les conditions pour lancer une analyse sont atteintes
+    Lazily initialize and return an InfluxDBClient.
+    This function ensures that the client is created only once and reused for subsequent calls.
 
-    :param query: une liste de données venant d'InfluxDB
-    :return: un json avec les données s'il doit y avoir une analyse
+    :return: InfluxDBClient instance
     """
-    if len(query) != 0:
-        measures = [{} for _ in query[0]]
-
-        for e in query:
-            i = 0
-            for r in e.records:
-                measures[i][r.get_field()] = r.get_value()
-
-                if "date" not in measures[i]:
-                    measures[i]["date"] = r.get_time().isoformat()
-
-                i = i + 1
-
-        print(f"There are {len(measures)} measures in the last 11 hours")
-        if len(measures) > 10:
-            print(f"There are enough measures in then last 11 hours, triggering analyse")
-            return json.dumps({"data": measures})
-        else:
-            return "{}"
-    else:
-        print(f"There is no measure in the last 11 hours")
-        return "{}"
-
-
-def connect_to_database():
-    """
-    Lance la connexion avec la base de données
-
-    :return: l'objet qui permet de communiquer avec la base de données
-    """
-    global client
-
-    if client is None:
-        client = influxdb_client.InfluxDBClient(
-            os.environ.get('INFLUXDB_URL'),
-            token=os.environ.get('INFLUXDB_TOKEN'),
-            org=os.environ.get('INFLUXDB_ORG')
+    global db_client
+    if db_client is None:
+        db_client = InfluxDBClient(
+            url=os.environ['INFLUXDB_URL'],
+            token=os.environ['INFLUXDB_TOKEN'],
+            org=os.environ['INFLUXDB_ORG']
         )
+    return db_client
 
-    return client
-
-
-def export_to_database(measurement, json_input, date):
+def export_to_database(bucket, measurement, data, timestamp):
     """
-    Permet d'enregistrer notre payload sur InfluxDB
+    Write a data point to InfluxDB.
 
-    :param measurement: le nom de la base de données dans laquelle on veut enregistrer les données
-    :param json_input: le payload sous format json
-    :param date: la date associée au paylaod
-    :return: rien
+    :param bucket: InfluxDB bucket name
+    :param measurement: Measurement (table) name
+    :param data: Dictionary containing 'rainfall' and 'waterLevel'
+    :param timestamp: Timestamp for the data point
+    :return: None
     """
-    write_api = connect_to_database().write_api(write_options=SYNCHRONOUS)
-
-    point = (Point(measurement)
-             .field("rainfall", json_input['rainfall'])
-             .field("waterLevel", json_input['waterLevel'])
-             .time(date, write_precision="s"))
-
-    write_api.write(bucket=os.environ.get('INFLUXDB_BUCKET'), org=os.environ.get('influxdb_org'), record=point)
-    write_api.flush()
+    write_api = connect_db().write_api(write_options=SYNCHRONOUS)
+    point = (
+        Point(measurement)
+        .field('rainfall', data['rainfall'])
+        .field('waterLevel', data['waterLevel'])
+        .time(timestamp, write_precision='s')
+    )
+    write_api.write(bucket=bucket, record=point)
     write_api.close()
 
-
-def query_from_database(measurement, stop_time):
+def query_last_n_hours(bucket, measurement, end_time, hours=10):
     """
-    Permet de récupérer des données enregistrées sur InfluxDB sur un intervalle de 11 heures
+    Query InfluxDB for the last `hours` of data.
 
-    :param measurement: le nom de la base de données de laquelle on veut récupérer les données
-    :param stop_time: date de fin de la requête
-    :return: une liste avec les données correspondantes
+    :param bucket: InfluxDB bucket name
+    :param measurement: Measurement (table) name
+    :param end_time: End time for the query
+    :param hours: Number of hours to look back
+    :return: Query result (list of records)
     """
-    query_api = connect_to_database().query_api()
+    start_time = end_time - timedelta(hours=hours)
+    stop_time = end_time + timedelta(seconds=1)  # Mini delta to include the exact end_time record
+    query = f'''
+        from(bucket: "{bucket}")
+        |> range(start: time(v: "{start_time.isoformat()}Z"), stop: time(v: "{stop_time.isoformat()}Z"))
+        |> filter(fn: (r) => r._measurement == "{measurement}")
+        |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
+    '''  
+    query_api = connect_db().query_api()
+    return query_api.query(query)
 
-    start_time = stop_time - timedelta(hours=11)
+def is_there_alert(data):
+    """
+    Determine if water level exceeds threshold (1.8m).
 
-    query = f"""from(bucket: "{os.environ.get('INFLUXDB_BUCKET')}")
-     |> range(start: time(v: "{str(start_time).replace(" ", "T")}Z"), stop: time(v: "{str(stop_time).replace(" ", "T")}Z"))
-     |> filter(fn: (r) => r._measurement == "{measurement}")
-     """
+    :param data: Dictionary containing 'waterLevel' and 'date'
+    :return: JSON with alert type and date if threshold is exceeded, else empty JSON
+    """
+    print(f"Water level is {data['waterLevel']} m")
+    if data['waterLevel'] > 1.8:
+        print("Threshold exceeded, triggering alert")
+        return {'alertType': 'floodUnderway', 'date': data['date']}
+    return {}
 
-    return query_api.query(query, org="Mycelium")
+def is_there_analysis(results):
+    """
+    If at least 11 measurements exist, package them for analysis.
+    """
+    records = []
+    for table in results:
+        for record in table.records:
+            vals = record.values
+            records.append({
+                'date': record.get_time().isoformat(),
+                'rainfall': vals.get('rainfall'),
+                'waterLevel': vals.get('waterLevel')
+            })
+    print(f"Found {len(records)} records in the last period")
+    if len(records) > 10:
+        print("Enough data for analysis, triggering analysis")
+        return {'data': records}
+    return {}
 
 
 def close_database_connection():
     """
-    Ferme la connexion avec la base de données
+    Close the InfluxDB client connection if it exists.
 
-    :return: rien
+    :return: None
     """
     global client
     if client is not None:
         client.close()
         client = None
+        
 
-
-async def process(req):
-    """
-    Fonction principale qui gère la connexion avec nats et appelle les fonctions pour enregistrer les données
-
-    :param req: un payload avec une date, un niveau d'eau de pluie (rainfall) et le niveau d'eau (waterlevel)
-    :return: envoie deux payloads distincts, un sur le topic triggerAnalyse et l'autre sur triggerAlert
-    """
-    # Connection au serveur MQTT
-    async with mqtt.Client("10.0.2.15", 1883) as mqtt:
-        json_input = json.loads(req)
-        date = datetime.strptime(json_input["date"], date_format)
-        print(f"Receiving data collected on {date}")
-
-        export_to_database("measures", json_input, date)
-        alert = is_there_alert(json_input)
-        if alert != '{}':
-            await mqtt.publish('triggerAlert', f"{alert}".encode())
-
-        query = query_from_database("measures", date)
-        analyse = is_there_analyse(query)
-        if analyse != '{}':
-            await mqtt.publish('triggerAnalyse', f"{analyse}".encode())
-        close_database_connection()

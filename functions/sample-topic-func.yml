@@ -6,7 +6,12 @@ functions:
   sample-topic-func:
     lang: go
     handler: ./sample-topic-func
-    image: ttl.sh/volodia-dell/sample-topic-func:2h
+    image: ttl.sh/thibault/sample-topic-func:2h
     annotations:
       topic: sample-topic
+      functionId: sample-topic-func-fn
+      tag: 1.0
+    environment:
+      MQTT_CLIENTID: sample-topic-func
+      MQTT_URL: tcp://10.0.2.15:1883
 
