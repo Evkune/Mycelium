@@ -1,12 +1,12 @@
 version: 1.0
 provider:
   name: openfaas
-  gateway: http://127.0.0.1:8080
+  gateway: http://10.43.147.218:8080
 functions:
   extraction-milesight:
     lang: golang-middleware
     handler: ./extraction-milesight
-    image: ttl.sh/arnolec/extraction-milesight:2h
+    image: ttl.sh/arnolec/extraction-milesight-armv7:2h
     annotations:
       topic: application/cab6a5b1-4b8f-4a3f-ae9a-976461b7499d/device/24e124136d358401/event/up
       functionId: extraction-milesight-fn
@@ -15,4 +15,4 @@ functions:
       INFLUXDB_URL: http://10.42.0.1:8086
       INFLUXDB_TOKEN: Uar6D5Kg0hmAeDjTN9r6q_YN3AhRbhVgLfjuSp243o4R4xHiQ0sEJFdkORZi-1hB57QTDr2VRQjd4Lg4rW1stg==
       MQTT_CLIENTID: extraction-milesight
-      MQTT_URL: tcp://192.168.122.61:1883
+      MQTT_URL: tcp://192.168.2.11:1883

@@ -1,12 +1,12 @@
 version: 1.0
 provider:
   name: openfaas
-  gateway: http://127.0.0.1:8080
+  gateway: http://10.43.147.218:8080
 functions:
   moyennes-to-vps:
     lang: golang-middleware
     handler: ./moyennes-to-vps
-    image: ttl.sh/arnolec/moyennes-to-vps:2h
+    image: ttl.sh/arnolec/moyennes-to-vps-armv7:2h
     annotations:
       topic: cron-function
       schedule: "*/2 * * * *"
@@ -16,6 +16,6 @@ functions:
       INFLUXDB_URL: http://10.42.0.1:8086
       INFLUXDB_TOKEN: Uar6D5Kg0hmAeDjTN9r6q_YN3AhRbhVgLfjuSp243o4R4xHiQ0sEJFdkORZi-1hB57QTDr2VRQjd4Lg4rW1stg==
       MQTT_CLIENTID: moyennes-to-vps
-      MQTT_URL: tcp://192.168.122.61:1883
+      MQTT_URL: tcp://192.168.2.11:1883
 
 

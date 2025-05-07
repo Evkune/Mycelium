@@ -1,12 +1,12 @@
 version: 1.0
 provider:
   name: openfaas
-  gateway: http://127.0.0.1:8080
+  gateway: http://10.43.147.218:8080
 functions:
   downlink-em300th:
     lang: python3
     handler: ./downlink-em300th
-    image: ttl.sh/arnolec/downlink-em300th:2h
+    image: ttl.sh/arnolec/downlink-em300th-armv7:2h
     annotations:
       topic: EM300TH-changePeriode
       functionId: downlink-em300th-fn

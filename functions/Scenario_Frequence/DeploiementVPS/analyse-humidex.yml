@@ -1,7 +1,7 @@
 version: 1.0
 provider:
   name: openfaas
-  gateway: http://127.0.0.1:8080
+  gateway: http://10.43.35.16:8080
 functions:
   analyse-humidex:
     lang: python3-flask
@@ -16,8 +16,6 @@ functions:
       HISTORY_PATH: "/data"
       MQTT_CLIENTID: analyse-humidex
       MQTT_URL: tcp://10.133.33.52:1883
-    secrets:
-      - mqtt-credentials
     labels:
       com.openfaas.scale.min: 1
       com.openfaas.scale.max: 3

@@ -77,7 +77,7 @@ func Handle(w http.ResponseWriter, r *http.Request) {
 	response := fmt.Sprintf("Temperature: %.1f°C, Humidity: %.1f%%", msg.Object.Temperature, msg.Object.Humidity)
 
 	//Write in the InfluxDB Database
-	org := "Mycelium"
+	org := "MyceliumVPS"
 	bucket := "Mesure-Milesight-Sensor"
 	writeAPI := influxClient.WriteAPIBlocking(org, bucket)
 

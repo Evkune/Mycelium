@@ -1,0 +1,66 @@
+Du point de vue linguistique, le rapport est bien rédigé. Les explications sont compréhensibles, il n'y a pas de fautes d'orthographe (sauf deux ou trois). Les illustrations sont bonnes. On peut voir que vous avez compris l'état du système actuel, que vous êtes au courant des technologies que vous allez devoir utiliser et que vous savez ce que vous devez développer cette année. 
+
+Néanmoins, ce rapport souffre de sérieux problèmes sur la pré-étude réalisée, la prise ne main du système existant et la présentation du cahier des charges. 
+1. La pré-étude n'est pas du tout présentée.
+2. La prise en main du logiciel existant n'est pas présentée. 
+3. Le cahier de charges en tant que tel n'est pas explicité. 
+4. Le rapport ne contient aucune référence ni bibliographique ni web. 
+5. Il y a des problèmes de présentation : texte très répétitif, illustrations non-référencées dans le texte, références vers les sections pas complètes. 
+6. Vous ne présentez aucun recul sur votre travail (les choix que vous avez dû faire, les risques, etc.)
+
+Voici les détails sur ces six éléments. 
+
+1. J'ai l'impression que vous avez confondu la pré-étude avec la description de la solution existante. Votre pré-étude se concentre uniquement sur les technologies utilisées et les versions précédentes du projet. Ce n'est pas une pré-étude. 
+Par pré-étude, on entend le positionnement de votre projet dans son contexte, présentation de l'objectif du projet, étude et comparaison avec des solutions existantes, présentation de comment les mêmes types de problèmes ont déjà été abordés auparavant. Rien de cela n'est décrit dans votre rapport. Du coup, je me demande si vous avez fait de la pré-étude. 
+- Quel est l'objectif de votre projet (du point de vue environnemental) ?
+- Pourquoi voulez-vous collectez les données ?
+- Quel type de données (liste claire et exhaustive) vous voulez collecter ?
+- Qui sera l'utilisateur du système que vous développez ?
+- Est-ce qu'il existe des solutions sur le marché qui permettent de faire ce que vous voulez faire ?
+- Comment les données que vous collectez seront exploitées et par qui ?
+- Comment la solution que vous développez est différente ou novatrice par rapport aux solutions existantes ?
+- Comment le même type des problèmes a déjà été adressé par d'autres projets/initiatives ?
+Tout cela devrait être étudié et décrit dans votre rapport sur la pré-étude. 
+
+Vous parlez d'un projet national TERRA FORMA et ensuite du projet Mycélium, mais vous n'expliquez pas de quoi il s'agit. Le lecteur ne sait pas ce que c'est le projet TERRA FORMA et ne comprend pas le lien entre les deux projets. Votre description n'est pas suffisamment factuelle.
+
+C'est uniquement à la page 6 que le lecteur commence à comprendre ce que vous voulez dire par "scénario". C'est trop tard.
+
+C'est uniquement en conclusion (!!!) que vous présentez l'objectif de votre projet. C'est bien trop tard !
+
+Après avoir lu le rapport entier, je ne sais toujours pas qui sera l'utilisateur final de votre solution (particuliers, entreprises, chercheurs, Météo France, autre ?)
+
+2. Vous avez décrit le système existant, mais vous n'avez pas présenté sa PRISE EN MAIN. D'où vient votre description de l'existant ? Est-ce que c'est votre encadrant qui vous a expliqué comment fonctionnait le système ? Est-ce que vous avez lu la documentation ou les rapports d'étudiants des projets précédents ? Ou est-ce que vous avez TESTÉ VOUS MÊMES la solution existante ? Il fallait présenter quels testes VOUS avez effectué et les résultats de ses testes. 
+
+Les sections qui présentent l'existant (section 2 et 3) sont très répétitives.  Beaucoup d'information est présentée deux fois. C'est une perte de place et du temps car vous demandez au lecteur de lire deux fois la même chose. 
+
+Vous focalisez beaucoup sur quelle fonctionnalité ou quel scénario ont été ajoutés dans quelle version du logiciel, mais ce n'est pas très important. L'important pour le lecteur est de comprendre l'état actuel du logiciel en septembre 2024, càd la version à partir de laquelle vous commencez votre travail. Vous avez perdu énormément de place en présentant les trois versions et en bien distinguant quelle partie du logiciel venait de quelle version, mais ce n'est pas crucial.  
+
+3. Vous avez décrit les fonctionnalités que vous souhaitez implémenter cette année, mais le cahier de charges en tant que tel n'a pas été présenté. Le CAHIER DES CHARGES n'est pas uniquement une liste de choses à faire. Il faut les ordonner pour savoir lesquelles sont nécessaires, lesquelles sont les plus prioritaires et lesquelles sont secondaires. Après avoir présenté les fonctionnalités, il fallait mettre un tableau ou une liste exhaustive avec des noms et des identifiants de toutes les fonctionnalités, leur classification  (de quel partie du système on parle : serveur, VM, front-end, back-end, IoT, capteurs, réseau, etc.). Pour chaque fonctionnalité il faut aussi présenter un niveau d'importance ou de priorité : est-ce qu'elle doit être obligatoirement implémentée cette année, ou est-ce optionnel ? Définir les priorités est crucial car elles vous permettent d'effectuer par la suite une planification de votre projet : dans quel ordre les fonctionnalités doivent être implémentées, interdépendances entre les fonctionnalités, etc. 
+
+4. Il s'agit d'un rapport de pré-étude, mais il ne contient AUCUNE RÉFÉRENCE ! Comment peut-on faire une pré-étude sans se référer à des sources ?  Si vous ne citez aucune source cela veut dire que vous n'avez RIEN CONSULTÉ pendant votre travail. Est-ce le cas ? 
+Citer les sources c'est : 
+- bien documenter vos propos, 
+- donner un pointeur à votre successeur qui pourra plus facilement reprendre votre travail, ou aller plus loin s'il le souhaite, 
+- reconnaître le travail de qq (cela devait être utile ce qu'il a fait si cela vous a aidé dans votre travail).
+
+5. Quelques commentaires sur la rédaction (voir le pdf annoté) :
+- Plusieurs formulations ne sont pas suffisamment précises. Il s'agit d'un rapport technique, qui doit être FACTUEL et PRÉCIS. 
+- Le texte est répétitif. 
+- Évitez à tout prix des phrases "vides" (qui ne disent rien de précis et qui pourraient être utilisées pour n'importe quel projet, dans n'importe quel domaine). 
+- Chaque figure doit être référencée dans le texte, par exemple "comme illustré en Figure X". Ne jamais utiliser "ci-dessous", ou "ci-dessus" dans un document rédigé en LaTeX, car vous ne pouvez pas être sûrs où la figure sera placée. Toujours se référer au numéro de la figure, tableau, etc. 
+- Attention à la typographie : noeud -> nœud.
+- Attention aux superlatifs. Il s'agit d'un rapport technique et non pas d'une publicité. 
+- Quand vous parlez de "robustesse", de "efficacité", de "facilité d'utilisation", vous devez définir ces termes, car suivant le domaine, ils peuvent avoir une signification différente. Il faut aussi réfléchir sur comment vous allez vérifier à la fin de votre projet si votre solution est en effet  robuste/efficace/facile à utiliser, etc. C'est bien de viser une solution efficace, robuste et facile d'utilisation, mais ce n'est pas suffisant. Il faut définir des mesures tangibles qui vous permettent de mesurer ces caractéristiques. Tout ça aurait dû être définit dans la phase de pré-étude et présenté dans votre rapport. 
+- Ne jamais utiliser une référence (par exemple, "voir 4") sans dire de quoi vous parlez. Est-ce qu'il s'agit de la figure 4, ou de la page 4 ou de la section 4 ? Lorsqu'on lit une version imprimée, on ne peut pas cliquer pour vérifier vers quoi vous avez voulu pointer. 
+- Il y avait des problèmes de \label dans votre document. Vous pointez parfois vers une section au lieu de pointer vers une figure et une autre fois vous pointer vers une autre figure que celle vers laquelle vous auriez dû pointer. 
+- Vous auriez pu expliquer d'où vient le nom de votre projet et ce que cela veut dire. 
+
+6. Commentaires divers :
+Vous promettez énormément de choses dans la section 4. Est-ce que tout cela pourra être mis en place avant la fin de l'année ? Est-ce qu'il y a des risques pour votre projet si certaines fonctionnalités ne sont pas implémentées ? Comment les différentes fonctionnalités sont-elles liées entre elles ?
+
+Votre solution repose grandement sur le protocole LoRaWAN, mais vous n'avez pas présenté ce protocole ni son fonctionnement au lecteur. C'est dommage. Quelle version du protocole utilisez-vous ? Il a été montré que ce protocole souffre de plusieurs problèmes de sécurité (https://eprint.iacr.org/2017/651). Avez-vous essayé de comprendre ces problèmes ? Est-ce qu'ils peuvent avoir une influence sur votre système, par exemple la fiabilité des données collectées ou fiabilité du système ? Comprenez-moi bien, je ne vous demande pas de réparer les problèmes de LoRaWAN, si cela est jugé hors sujet dans votre projet. Néanmoins, la phase de pré-étude est là pour que vous puissiez comprendre les problèmes existants et évaluer s'ils peuvent avoir ou pas un impact sur le système que vous développez.   
+
+Vous ne dites rien sur votre organisation. Comment avez-vous organisé le travail dans ce projet ? Quels sont les rôles que vous avez attribué aux membres du groupe ? Est-ce que tout le monde travaille sur tous les aspects ? Quels outils de communication, de planification utilisez-vous ?
+
+Vous auriez pu présenter (par exemple en conclusion) une rétrospective sur le travail déjà effectué. Est-ce que la phase qui vient de se terminer a été utile ou pas ? Qu'est-ce que vous avez appris ? Voyez-vous des risques potentiels dans le déroulé du projet ? Comment prévenir ces risques ?

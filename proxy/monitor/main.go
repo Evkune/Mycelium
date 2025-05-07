@@ -184,8 +184,6 @@ func updateTopicsAndFunctions() {
 		functionsTagsCombinedMap = combinedFunctionsTags
 		functionTagsMap = newFunctionsTags
 		mu.Unlock()
-		
-		log.Printf("Updated topics and functions: %d topics, %d functions", len(topicFunctionsMap), len(functionsTagsCombinedMap))
 		time.Sleep(30 * time.Second)
 	}
 }
@@ -297,13 +295,6 @@ func getMetrics() (float64, float64, error) {
 
     cpuUsagePercent := float64(totalCPUUsed.MilliValue()) / float64(totalCPUAlloc.MilliValue()) * 100
     memUsagePercent := float64(totalMemUsed.Value()) / float64(totalMemAlloc.Value()) * 100
-
-    fmt.Printf("Cluster CPU Usage: %sm / %sm (%.2f%%)\n",
-        totalCPUUsed.String(), totalCPUAlloc.String(), cpuUsagePercent)
-    fmt.Printf("Cluster Memory Usage: %dMi / %dMi (%.2f%%)\n",
-        totalMemUsed.ScaledValue(resource.Mega),
-        totalMemAlloc.ScaledValue(resource.Mega),
-        memUsagePercent)
 	return cpuUsagePercent, memUsagePercent, nil
 }
 

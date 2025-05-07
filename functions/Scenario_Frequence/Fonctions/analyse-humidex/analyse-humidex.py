@@ -7,6 +7,8 @@ import numpy as np
 from scipy import stats
 import pandas as pd
 from datetime import datetime
+import logging
+import sys
 
 # Constantes
 HISTORY_FILE = "/data/humidex_history.csv"  # Chemin persistant dans un volume monté
@@ -68,7 +70,7 @@ def test_t_student_une_valeur(valeurs_historiques, nouvelle_valeur):
 # Fonction pour envoyer un message MQTT
 def send_mqtt_message(message_json, topic, broker_url):
     try:
-        client = mqtt.Client("fonction_chaleur")
+        client = mqtt.Client("analyse_humidex")
         host = broker_url.replace("tcp://", "").split(":")[0]
         port = int(broker_url.split(":")[-1])
         
@@ -252,4 +254,6 @@ def handle(request):
 
 # Fonction d'entrée pour les environnements fog/serverless
 def main(params):
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
     return handle(params)

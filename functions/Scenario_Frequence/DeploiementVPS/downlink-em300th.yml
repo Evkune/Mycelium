@@ -1,0 +1,18 @@
+version: 1.0
+provider:
+  name: openfaas
+  gateway: http://10.43.35.16:8080
+functions:
+  downlink-em300th:
+    lang: python3
+    handler: ./downlink-em300th
+    image: ttl.sh/arnolec/downlink-em300th:2h
+    annotations:
+      topic: EM300TH-changePeriode
+      functionId: downlink-em300th-fn
+      tag: 1.0
+    environment:
+      SERVER: 10.42.0.1:8082
+      DEV_EUI: 24e124136d358401
+      API_TOKEN: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJjaGlycHN0YWNrIiwiaXNzIjoiY2hpcnBzdGFjayIsInN1YiI6ImMzZDY4Mzk2LWIyYTUtNDc2My05YmYwLTU1NWMyYTE2ZDJkMyIsInR5cCI6ImtleSJ9.fhHJOxcF0yI7kAmcVzDTKB0SFmBAEup-dFjiBv74RdQ
+

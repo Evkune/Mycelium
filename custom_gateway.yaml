@@ -1,0 +1,100 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gateway
+  namespace: openfaas
+  labels:
+    app: gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gateway
+  template:
+    metadata:
+      labels:
+        app: gateway
+    spec:
+      containers:
+      - name: gateway
+        image: ghcr.io/volodiapg/openfaas/gateway:0.27.2
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+        env:
+        - name: functions_provider_url
+          value: "http://localhost:8081"
+        - name: write_debug
+          value: "true"
+        - name: basic_auth
+          value: "false"
+      - name: faas-netes
+        image: ghcr.io/volodiapg/openfaas/faas-netes:0.17.1
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8081
+        env:
+        - name: write_debug
+          value: "true"
+        - name: function_namespace
+          value: "openfaas-fn"
+        - name: port
+          value: "8081"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway
+  namespace: openfaas
+spec:
+  type: NodePort
+  selector:
+    app: gateway
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+    nodePort: 31112
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway-internal
+  namespace: openfaas
+  labels:
+    app: gateway
+spec:
+  type: ClusterIP
+  selector:
+    app: gateway
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: openfaas-fn
+  name: openfaas-deployer
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["services", "pods", "configmaps"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: openfaas-deployer-binding
+  namespace: openfaas-fn
+subjects:
+  - kind: ServiceAccount
+    name: default
+    namespace: openfaas
+roleRef:
+  kind: Role
+  name: openfaas-deployer
+  apiGroup: rbac.authorization.k8s.io

@@ -1,12 +1,12 @@
 version: 1.0
 provider:
   name: openfaas
-  gateway: http://127.0.0.1:8080
+  gateway: http://10.43.147.218:8080
 functions:
   notification-to-rss:
     lang: golang-middleware
     handler: ./notification-to-rss
-    image: ttl.sh/arnolec/notification-to-rss:2h
+    image: ttl.sh/arnolec/notification-to-rss-armv7:2h
     annotations:
       topic: notification
       functionId: notification-to-rss-fn

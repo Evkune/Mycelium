@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: openfaas
+  name: router
+  labels:
+    app: proxy-router
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: proxy-router
+  template:
+    metadata:
+      labels:
+        app: proxy-router
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: In
+                values:
+                - nikos0
+      tolerations:
+      - key: "key"
+        operator: "Equal"
+        value: "value"
+        effect: "NoExecute"
+      containers:
+      - name: proxy-router
+        image: docker.io/sky010/proxy-router:armv7
+        ports:
+        - containerPort: 8080
+        env:
+        - name: client-id
+          value: "routerCluster"
+        - name: broker
+          value: "tcp://192.168.2.11:1883"
+        - name: url-monitoring
+          value: "http://100.118.252.122:30080"
+        - name: url-invoker
+          value: "http://100.118.252.122:30081"
+        - name: url-other-invoker
+          value: "http://100.104.175.11:30081"

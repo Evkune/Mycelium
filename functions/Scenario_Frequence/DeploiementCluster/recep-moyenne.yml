@@ -1,12 +1,12 @@
 version: 1.0
 provider:
   name: openfaas
-  gateway: http://127.0.0.1:8080
+  gateway: http://10.43.147.218:8080
 functions:
   recep-moyenne:
     lang: golang-middleware
     handler: ./recep-moyenne
-    image: ttl.sh/arnolec/recep-moyenne:2h
+    image: ttl.sh/arnolec/recep-moyenne-armv7:2h
     annotations:
       topic: moyennestovps
       functionId: moyennes-to-vps-fn

@@ -1,12 +1,12 @@
 version: 1.0
 provider:
   name: openfaas
-  gateway: http://127.0.0.1:8080
+  gateway: http://10.43.147.218:8080
 functions:
   analyse-humidex:
     lang: python3-flask
     handler: ./analyse-humidex
-    image: ttl.sh/arnolec/analyse-humidex:2h
+    image: ttl.sh/arnolec/analyse-humidex-armv7:2h
     annotations:
       topic: fonction_chaleur
       functionId: analyse-humidex-fn
@@ -15,9 +15,7 @@ functions:
       MORE_DATA: "false"
       HISTORY_PATH: "/data"
       MQTT_CLIENTID: analyse-humidex
-      MQTT_URL: tcp://192.168.122.61:1883
-    secrets:
-      - mqtt-credentials
+      MQTT_URL: tcp://192.168.2.11:1883
     labels:
       com.openfaas.scale.min: 1
       com.openfaas.scale.max: 3

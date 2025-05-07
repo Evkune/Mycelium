@@ -78,7 +78,7 @@ func Handle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	//Write in the InfluxDB Database
-	org := "Mycelium"
+	org := "MyceliumVPS"
 	bucket := "Mesure-Capteurs-OSUR"
 	writeAPI := influxClient.WriteAPIBlocking(org, bucket)
 

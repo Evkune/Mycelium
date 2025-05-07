@@ -45,7 +45,6 @@ func getTopicsAndFunctions() {
 	for {
 		time.Sleep(30 * time.Second)
 		// Get the topics and functions from the monitoring service
-		log.Printf("Getting topics and functions from: %s", monitoringURL)
 		resp, err := http.Get(monitoringURL + "/topics-functions")
 		if err != nil {
 			log.Printf("Error getting topics and functions: %s", err)
