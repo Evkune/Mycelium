@@ -6,7 +6,7 @@ functions:
   sample-topic-func:
     lang: go
     handler: ./sample-topic-func
-    image: ttl.sh/thibault/sample-topic-func:2h
+    image: ttl.sh/evan/sample-topic-func:2h
     annotations:
       topic: sample-topic
       functionId: sample-topic-func-fn

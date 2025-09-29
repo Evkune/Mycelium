@@ -46,15 +46,19 @@ faas-pub:
 # Publish a single OpenFaaS function using the registry variables and modify the function file
 faas-pub-single file:
     #!/usr/bin/env bash
+    # on part toujours de la racine du projet
     cd {{ justfile_directory() }}/functions
-    sed -i "s|image: .*|image: {{ REGISTRY }}/$(basename {{file}} .yml):{{ TAG }}|" "{{file}}"
-    sed -i "s|gateway: .*|gateway: {{ OPENFAAS }}|" "{{file}}"
-    sed -i "s|MQTT_PORT: .*|MQTT_PORT: {{ MQTT_PORT }}|" "{{file}}"
+    # on passe le chemin relatif à partir de 'functions/'
+    RELATIVE_FILE=$(realpath --relative-to=. "../{{file}}")
+    sed -i "s|image: .*|image: {{ REGISTRY }}/$(basename {{file}} .yml):{{ TAG }}|" "$RELATIVE_FILE"
+    sed -i "s|gateway: .*|gateway: {{ OPENFAAS }}|" "$RELATIVE_FILE"
+    sed -i "s|MQTT_PORT: .*|MQTT_PORT: {{ MQTT_PORT }}|" "$RELATIVE_FILE"
     {{SSH_CMD}} << EOF
     cd /home/myce/mycelium/functions
-    faas-cli publish -f "{{file}}"
-    faas-cli deploy  -f "{{file}}"
+    faas-cli publish -f "$RELATIVE_FILE"
+    faas-cli deploy  -f "$RELATIVE_FILE"
     EOF
+
 
 mqtt-pub topic message:
     mosquitto_pub -h 127.0.0.1 -p {{MQTT_PORT}} -t "{{ topic }}" -m "{{ message }}"

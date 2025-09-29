@@ -28,7 +28,7 @@
         inputs',
         ...
       }: {
-        formatter = pkgs.alejandra;
+      	formatter = pkgs.alejandra;
       };
       flake = {
         _module.args = {
