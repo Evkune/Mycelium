@@ -4,11 +4,11 @@ provider:
   gateway: http://127.0.0.1:8080
 functions:
   analyse-sensor-data:
-    lang: python3-debian
+    lang: python3
     build_args:
       PYTHON_VERSION: 3.10
-    handler: ./analyse-sensor-data
-    image: ttl.sh/thibault/analyse-sensor-data:2h
+    handler: Scenario_Inondation/analyse-sensor-data
+    image: ttl.sh/evan/analyse-sensor-data:2h
     environment:
       #nats_host: "nats://10.62.0.1:4222"
       MQTT_CLIENTID: analyse-sensor-data
@@ -22,4 +22,4 @@ functions:
 
 configuration:
   copy:
-    - ./analyse-sensor-data/model.keras
+    - model.keras

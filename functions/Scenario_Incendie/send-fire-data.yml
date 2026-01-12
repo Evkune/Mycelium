@@ -1,0 +1,12 @@
+version: 1.0
+provider:
+  name: openfaas
+  gateway: http://127.0.0.1:8080
+functions:
+  send-fire-data:
+    lang: python3
+    handler: Scenario_Incendie/send-fire-data
+    image: ttl.sh/evan/send-fire-data:2h
+    environment:
+      MQTT_CLIENTID: send-fire-data
+      MQTT_URL: tcp://10.0.2.15:1883

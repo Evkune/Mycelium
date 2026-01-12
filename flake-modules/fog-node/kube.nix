@@ -203,10 +203,10 @@ in {
 
                 # Création des autres buckets avec tokens spécifiques
                 ${pkgs.influxdb2-cli}/bin/influx bucket create --host http://${toString influxSettings.http-bind-address} --org Mycelium --name Moyennes-VM
+                ${pkgs.influxdb2-cli}/bin/influx bucket create --host http://${toString influxSettings.http-bind-address} --org Mycelium --name FireMonitoring
                 ${pkgs.influxdb2-cli}/bin/influx bucket create --host http://${toString influxSettings.http-bind-address} --org Mycelium --name FloodMonitoring
                 ${pkgs.influxdb2-cli}/bin/influx bucket create --host http://${toString influxSettings.http-bind-address} --org Mycelium --name Mesure-Capteurs-OSUR
                 ${pkgs.influxdb2-cli}/bin/influx bucket create --host http://${toString influxSettings.http-bind-address} --org Mycelium --name Mesure-Milesight-Sensor
-
               '';
             in "${script} %u";
             Type = "oneshot"; # Le service s'exécute une fois puis s'arrête
